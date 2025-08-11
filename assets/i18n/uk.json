@@ -1,0 +1,113 @@
+{
+  "home": "Головна",
+  "next": "Далі",
+  "sort_by": "Сортувати за:",
+  "map": "Карта",
+  "cancel": "Скасувати",
+  "apply": "Застосувати",
+  "settings": "Налаштування",
+  "search_in_this_area": "Шукати в цій області",
+  "select_location": "Виберіть розташування",
+  "language": "Мова",
+  "phone": "Телефон",
+  "create_master": "Створити майстра",
+  "name": "Ім'я",
+  "description": "Опис",
+  "pick_photo": "Вибрати фото",
+  "submit": "Створити",
+  "select_speciality": "Спеціальність",
+  "booking_panel": "Панель бронювання",
+  "selected_date": "Обрана дата",
+  "booked_by": "Заброньовано",
+  "available": "Доступно",
+  "input_details": "Введіть дані",
+  "client_name": "Ім'я клієнта",
+  "duration": "Тривалість",
+  "summary_info_page": {
+    "photo": "Фото",
+    "address": "Адреса",
+    "phone": "Телефон",
+    "specialty": "Спеціальність",
+    "description": "Опис",
+    "register_button": "Зареєструватися",
+    "title": "Загальна інформація",
+    "name": "Ім'я"
+  },
+  "map_view": {
+    "sort_rating": "Рейтинг",
+    "sort_distance": "Відстань",
+    "sort_name": "Ім'я",
+    "title": "Огляд на карту",
+    "search": "Пошук",
+    "search_placeholder": "Шукати в цій області",
+    "select_location": "Виберіть розташування",
+    "call": "Подзвонити",
+    "filter": "Фільтр",
+    "filter_title": "Фільтр і сортування",
+    "filter_name": "Пошук",
+    "filter_rating": "Рейтинг",
+    "filter_available": "Тільки вільні майстри",
+    "filter_service": "Фільтр послуг",
+    "master_dialog": {
+      "title": "Створити майстра чи увійти?",
+      "create": "Створити",
+      "login": "Увійти",
+      "input_phone": "Введіть номер телефону",
+      "phone": "Телефон",
+      "get_sms_code": "Отримати СМС код",
+      "code": "Код",
+      "input_sms_code": "Введіть код"
+    }
+  },
+  "system": {
+    "filed_verify": "Код не верифіковано, будь лакса спробуйте ще раз."
+  },
+  "settings_view": {
+    "logout": "Logout"
+  },
+  "booking": {
+    "name": "Ім'я",
+    "phone": "Телефон",
+    "select_service": "Виберіть послугу",
+    "input_details": "Введіть дані"
+  },
+  "data": {
+    "services": {
+      "hair_styling": "Укладання волосся",
+      "hair_cutting": "Стрижка волосся",
+      "hair_coloring": "Фарбування волосся",
+      "makeup": "Макіяж",
+      "nail_service": "Нігтьовий сервіс",
+      "skin_care": "Догляд за шкірою",
+      "massage": "Масаж",
+      "hair_removal": "Видалення волосся",
+      "tattoo": "Татуювання",
+      "piercing": "Пірсинг",
+      "cosmetics_selection": "Підбір косметики",
+      "cosmetology": "Косметологія",
+      "microdermabrasion": "Мікродермабразія",
+      "mesotherapy": "Мезотерапія",
+      "biorevitalization": "Біоревіталізація",
+      "plasmolifting": "Плазмоліфтинг",
+      "thread_lifting": "Нитковий ліфтинг",
+      "contour_plastic": "Контурна пластика",
+      "botulinum_therapy": "Ботулінотерапія",
+      "fillers": "Філери",
+      "laser_epilation": "Лазерна епіляція",
+      "laser_rejuvenation": "Лазерне омолодження",
+      "laser_capillaries": "Лазерне видалення капілярів",
+      "laser_pigmentation": "Лазерне видалення пігментації",
+      "laser_tattoo_removal": "Лазерне видалення татуювань",
+      "laser_resurfacing": "Лазерне шліфування",
+      "laser_lipolysis": "Лазерний ліполіз",
+      "laser_photorejuvenation": "Лазерне фотомолодження",
+      "laser_therapy": "Лазерна терапія"
+    }
+  },
+  "common": {
+    "invalid_code": "Неправильний код",
+    "invalid_phone": "Неправильний номер телефону",
+    "cancel": "Скасувати",
+    "submit": "Створити"
+  }
+}

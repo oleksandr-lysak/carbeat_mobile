@@ -1,0 +1,102 @@
+{
+  "home": "Home",
+  "map": "Map",
+  "settings": "Settings",
+  "search_in_this_area": "Search in this area",
+  "select_location": "Select Location",
+  "language": "Language",
+  "phone": "Phone",
+  "create_master": "Create Master",
+  "name": "Name",
+  "description": "Description",
+  "pick_photo": "Pick Photo",
+  "submit": "Submit",
+  "select_speciality": "Speciality",
+  "booking_panel": "Booking Panel",
+  "selected_date": "Selected Date",
+  "booked_by": "Booked by",
+  "available": "Available",
+  "summary_info_page": {
+    "photo": "Photo",
+    "address": "Address",
+    "phone": "Phone",
+    "specialty": "Specialty",
+    "description": "Description",
+    "register_button": "Register",
+    "title": "Summary Information",
+    "name": "Name"
+  },
+  "map_view": {
+    "title": "Map View",
+    "search": "Search",
+    "search_placeholder": "Search in this area",
+    "select_location": "Select Location",
+    "call": "Call",
+    "filter_title": "Filter and sort",
+    "filter_name": "Search",
+    "filter_rating": "Rating",
+    "filter_available": "Available",
+    "filter_service": "Service",
+    "master_dialog": {
+      "title": "Create master or login?",
+      "create": "Create",
+      "login": "Login",
+      "input_phone": "Input phone number",
+      "phone": "Phone",
+      "get_sms_code": "Get SMS code",
+      "code": "Code",
+      "input_sms_code": "Input code"
+    }
+  },
+  "system": {
+    "filed_verify": "Failed to verify code. Please try again."
+  },
+  "settings_view": {
+    "logout": "Logout"
+  },
+  "booking": {
+    "name":"Name",
+    "phone":"Phone",
+    "select_service": "Select service",
+    "input_details": "Input details"
+  },
+  "data": {
+    "services":{
+      "hair_styling": "Hair styling",
+      "hair_cutting": "Hair cutting",
+      "hair_coloring": "Hair coloring",
+      "makeup": "Makeup",
+      "nail_service": "Nail service",
+      "skin_care": "Skin care",
+      "massage": "Massage",
+      "hair_removal": "Hair removal",
+      "tattoo": "Tattoo",
+      "piercing": "Piercing",
+      "cosmetics_selection": "Cosmetics selection",
+      "cosmetology": "Cosmetology",
+      "microdermabrasion": "Microdermabrasion",
+      "mesotherapy": "Mesotherapy",
+      "biorevitalization": "Biorevitalization",
+      "plasmolifting": "Plasmolifting",
+      "thread_lifting": "Thread lifting",
+      "contour_plastic": "Contour plastic",
+      "botulinum_therapy": "Botulinum therapy",
+      "fillers": "Fillers",
+      "laser_epilation": "Laser epilation",
+      "laser_rejuvenation": "Laser rejuvenation",
+      "laser_capillaries": "Laser capillaries",
+      "laser_pigmentation": "Laser pigmentation",
+      "laser_tattoo_removal": "Laser tattoo removal",
+      "laser_resurfacing": "Laser resurfacing",
+      "laser_lipolysis": "Laser lipolysis",
+      "laser_photorejuvenation": "Laser photorejuvenation",
+      "laser_therapy": "Laser therapy"
+    }
+  },
+  "common": {
+    "invalid_code": "Invalid code",
+    "invalid_phone": "Invalid phone number",
+    "cancel": "Cancel",
+    "submit": "Submit"
+  }
+}

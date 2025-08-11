@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "78546251315",
+    "project_id": "go-garage-55969",
+    "storage_bucket": "go-garage-55969.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:78546251315:android:cb6a1a5a700a107794fd46",
+        "android_client_info": {
+          "package_name": "com.example.garage"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5l5_ODa0FXlINNfy-oIgFXxriUbElEEk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
