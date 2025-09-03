@@ -1,3 +1,4 @@
+import 'package:carbeat/services/user_service.dart';
 import 'package:dio/dio.dart';
 import 'package:carbeat/services/language_service.dart';
 import 'package:carbeat/services/token_service.dart';
@@ -59,6 +60,7 @@ class ApiService {
     if (accessToken != null) {
       dio.options.headers['Authorization'] = 'Bearer $accessToken';
     } else {
+      await UserService().deleteUser();
       dio.options.headers.remove('Authorization');
     }
   }
@@ -152,13 +154,17 @@ class ApiService {
     }
 
     dynamic respData = response?.data;
-    String message;
+    
+    // If we have response data, return it as-is to preserve validation errors
     if (respData is Map<String, dynamic>) {
-      message = respData['message']?.toString() ?? 'Request error';
-    } else {
-      message = respData?.toString() ?? 'Request error';
+      // Add error flag and status for consistency
+      respData['error'] = true;
+      respData['status'] = statusCode;
+      return respData;
     }
 
+    // Fallback for non-map responses
+    String message = respData?.toString() ?? 'Request error';
     return {
       'error': true,
       'status': statusCode,
@@ -196,10 +202,21 @@ class ApiService {
     try {
       await _addHeaders(headers);
       final response = await _performRequest(() => dio.put(url, data: data));
+      
+      // Handle different response statuses
       if (response.statusCode == 200) {
         return response.data;
+      } else if (response.statusCode == 422) {
+        // Validation errors - return the response data as-is
+        final respData = response.data;
+        if (respData is Map<String, dynamic>) {
+          respData['error'] = true;
+          respData['status'] = response.statusCode;
+        }
+        return respData;
+      } else {
+        return _handleErrorResponse(response);
       }
-      return _handleErrorResponse(response);
     } catch (e) {
       if (e is DioException) {
         return _handleErrorResponse(e.response);

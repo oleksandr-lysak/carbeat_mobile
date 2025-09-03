@@ -17,6 +17,7 @@ class MapPickerPageState extends State<MapPickerPage> {
   LatLng? _selectedLocation;
   LatLng? _currentLocation;
   final MapController _mapController = MapController();
+  String? _phone;
 
   @override
   void initState() {
@@ -52,17 +53,28 @@ class MapPickerPageState extends State<MapPickerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && _phone == null) {
+      final dynamic phoneArg = args['phone'];
+      if (phoneArg is String) {
+        _phone = phoneArg;
+      }
+    }
     return Scaffold(
-      
+      backgroundColor: Styles().titleColor,
       body: Stack(
         children: [
         
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _currentLocation ??
-                  const LatLng(37.7749, -122.4194), // Default to San Francisco
-              initialZoom: 25,
+              minZoom: 2,
+              maxZoom: 18,
+              initialCenter: _currentLocation ?? const LatLng(37.7749, -122.4194),
+              initialZoom: 18,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
               onPositionChanged: (MapCamera mapCamera, bool hasGesture) {
                 if (hasGesture) {
                   _updateSelectedLocation(); // Оновити вибрану локацію при русі карти
@@ -71,7 +83,9 @@ class MapPickerPageState extends State<MapPickerPage> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}{r}.png',
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                retinaMode: RetinaMode.isHighDensity(context),
                 userAgentPackageName: 'com.it-pragmat.plant',
                 tileProvider: const FMTCStore('mapStore').getTileProvider(),
               ),
@@ -98,7 +112,10 @@ class MapPickerPageState extends State<MapPickerPage> {
                 Navigator.pushNamed(
                   context,
                   '/create-master',
-                  arguments: _selectedLocation,
+                  arguments: {
+                    'location': _selectedLocation,
+                    'phone': _phone,
+                  },
                 );
               },
               child: Text(

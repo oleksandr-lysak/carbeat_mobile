@@ -135,6 +135,12 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                       items: serviceItems,
                       selectedItem: _selectedService,
                       onChanged: (val) => _selectedService = val,
+                      validator: (val) {
+                        if (val == null || val.id == 0) {
+                          return 'Please select a service';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
@@ -168,7 +174,9 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
     }..removeWhere((k, v) => v == null || (v is String && v.isEmpty));
 
     final res = await api.putRequest('masters/$_masterId', body);
-    if (res['errors'] == null) {
+    
+    // Check for both 'error' and 'errors' fields
+    if (res['error'] == null && res['errors'] == null) {
       AppToast.show('Profile updated');
       Navigator.pop(context);
       // Refresh local user data after successful update
@@ -181,7 +189,20 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated')));
       }
     } else {
-      AppToast.show('Error', background: Colors.red);
+      // Handle validation errors
+      String errorMessage = 'Error';
+      if (res['errors'] != null) {
+        final errors = res['errors'] as Map<String, dynamic>;
+        if (errors['service_id'] != null) {
+          errorMessage = 'Invalid service selected';
+        } else if (errors.isNotEmpty) {
+          errorMessage = errors.values.first.toString();
+        }
+      } else if (res['error'] != null) {
+        errorMessage = res['error'].toString();
+      }
+      
+      AppToast.show(errorMessage, background: Colors.red);
     }
   }
 } 

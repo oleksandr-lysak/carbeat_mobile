@@ -29,15 +29,17 @@ import '../../utils/parse_utils.dart';
 import 'package:carbeat/services/user_service.dart';
 import 'package:carbeat/widgets/cluster_circle.dart';
 import 'package:carbeat/widgets/master_profile_sheet.dart';
-
-class MapView extends StatefulWidget {
+import 'package:carbeat/navigation/route_observer.dart';
+ 
+ 
+ class MapView extends StatefulWidget {
   const MapView({super.key});
 
   @override
   MapViewState createState() => MapViewState();
 }
 
-class MapViewState extends State<MapView> with TickerProviderStateMixin {
+class MapViewState extends State<MapView> with TickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
   final pageController = PageController();
   static final MapController mapController = MapController();
   final DraggableScrollableController sheetController =
@@ -46,7 +48,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
   List<Master> mapMasters = [];
   List<GarageMarker> masters = [];
   LatLng? currentLocation;
-  int selectedIndex = 0;
+  int selectedIndex = -1;
   bool loading = true;
   int totalPages = 1;
   int currentPage = 1;
@@ -82,11 +84,22 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
   // Cached zoom level so we can detect threshold crossings.
   double _currentZoom = 0;
 
+  // Guard to suppress page change handling while we refresh/rebuild lists
+  bool _isRefreshing = false;
+  bool _softRefreshing = false;
+
   // Masters that should currently be shown on the map after applying zoom-based
   // filtering rules.
   List<Master> visibleMasters = [];
-
+  
+  int? _selectedMasterId;
+  
   late final StreamSubscription _mapSub;
+  bool _isRouteVisible = false;
+  bool _isRouteSubscribed = false;
+  
+  // Threshold: show detailed markers above this zoom, blue dots otherwise
+  static const double _markerDetailZoomThreshold = 15.0;
 
   @override
   void initState() {
@@ -98,8 +111,8 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ServiceProvider>(context, listen: false).loadSpecialties();
     });
+    WidgetsBinding.instance.addObserver(this);
     _initLocationAndLoadData();
-    _refreshTimer = Timer.periodic(refreshInterval, (_) => _softRefreshMasters());
 
     // Check whether the current user is a master so that we can optionally
     // display additional UI (e.g. the "Become available" button).
@@ -107,12 +120,57 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
 
     // Listen for map movements/zoom changes to update visible masters.
     _mapSub = MapViewState.mapController.mapEventStream.listen((event) {
-      // Update only on zoom changes for performance.
-      final newZoom = MapViewState.mapController.camera.zoom;
-      if ((newZoom - _currentZoom).abs() >= 0.1) {
-        _updateVisibleMasters();
-      }
+      _updateVisibleMasters();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (!_isRouteSubscribed && route is PageRoute) {
+      routeObserver.subscribe(this, route);
+      _isRouteSubscribed = true;
+      _isRouteVisible = true;
+      _startRefreshTimer();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_isRouteVisible) {
+        _startRefreshTimer();
+      }
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _stopRefreshTimer();
+    }
+  }
+
+  @override
+  void didPush() {
+    _isRouteVisible = true;
+    _startRefreshTimer();
+  }
+
+  @override
+  void didPopNext() {
+    _isRouteVisible = true;
+    _startRefreshTimer();
+  }
+
+  @override
+  void didPushNext() {
+    _isRouteVisible = false;
+    _stopRefreshTimer();
+  }
+
+  @override
+  void didPop() {
+    _isRouteVisible = false;
+    _stopRefreshTimer();
   }
 
   Future<void> _initLocationAndLoadData() async {
@@ -159,10 +217,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
     String url = '${serverUrl}masters?';
     url += params.entries.map((e) => "${e.key}=${e.value}").join('&');
 
-    Response response = await dio.get(url);
+    Response response = await dio.get('$url&per_page=1000');
     apiData = response.data;
     
-    var tagObjsJson = apiData["data"] as List;
+    var tagObjsJson = apiData["masters"]["data"] as List;
     List<Master> tagObjs = await compute(parseMasters, tagObjsJson);
     mapWasLoaded = true;
     return tagObjs;
@@ -218,7 +276,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
     setState(() {
       mapMasters.addAll(masters);
       if (page == 1) {
-        totalPages = masters.isNotEmpty ? apiData["meta"]["last_page"] : 1;
+        totalPages = masters.isNotEmpty ? apiData["masters"]["last_page"] : 1;
       }
 
       if (updateImmediately) {
@@ -230,22 +288,84 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
 
   void _createMarkers() {
     masters = [];
+    final Set<int> seenMasterIds = {};
+    final double zoom = _controllerReady() ? mapController.camera.zoom : 12;
+    final bool showDetailedMarkers = zoom > _markerDetailZoomThreshold;
     for (int i = 0; i < visibleMasters.length; i++) {
       final master = visibleMasters[i];
+      if (seenMasterIds.contains(master.id)) continue;
+      seenMasterIds.add(master.id);
+      final bool isActive = i == selectedIndex;
+      final double markerSize = showDetailedMarkers
+          ? (isActive ? 52.0 : 40.0)
+          : (isActive ? 20.0 : 12.0);
       final marker = GarageMarker(
-        key: ValueKey('${master.id}_${master.available}'),
-        height: 40,
-        width: 40,
+        key: ValueKey('marker_${master.id}'),
+        height: markerSize,
+        width: markerSize,
         point: master.location,
         master: master,
         child: GestureDetector(
           onTap: () {
             _onMarkerTap(i);
           },
-          child: PulsatingMaster(
-            key: ValueKey('${master.id}_${master.available}'),
-            master: master,
-            isActive: i == selectedIndex,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.9, end: 1.0).animate(animation),
+                child: child,
+              ),
+            ),
+            child: showDetailedMarkers
+                ? Container(
+                    key: ValueKey('detailed_${master.id}_${master.available ? 1 : 0}'),
+                    child: AnimatedScale(
+                      scale: isActive ? 1.15 : 1.0,
+                      duration: const Duration(milliseconds: 500),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (isActive)
+                            Container(
+                              width: markerSize * 1.4,
+                              height: markerSize * 1.4,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.blueAccent.withOpacity(0.25),
+                              ),
+                            ),
+                          if (isActive)
+                            Container(
+                              width: markerSize * 1.05,
+                              height: markerSize * 1.05,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                            ),
+                          PulsatingMaster(
+                            master: master,
+                            isActive: isActive,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : Container(
+                    key: ValueKey('dot_${master.id}_${master.available ? 1 : 0}'),
+                    child: Center(
+                      child: _BouncingDot(
+                        size: markerSize,
+                        color: master.available ? Colors.blue : Colors.grey,
+                        isActive: isActive,
+                        bounce: master.available,
+                      ),
+                    ),
+                  ),
           ),
         ),
       );
@@ -260,40 +380,18 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
 
     setState(() {
       selectedIndex = index;
-      currentLocation = visibleMasters[index].location;
+      _selectedMasterId = visibleMasters[index].id;
+      _createMarkers();
     });
-
-    // Smoothly move the map to the selected master.
-    // If the current zoom is below the clustering-disable threshold, zoom in so
-    // that the selected marker is shown individually rather than inside a
-    // cluster. The threshold must match `disableClusteringAtZoom` used in
-    // `MarkerClusterLayerOptions`.
-    const double _minZoomNoClustering = 18.0; // keep in sync with cluster layer
-    final double targetZoom = mapController.camera.zoom < _minZoomNoClustering
-        ? _minZoomNoClustering
-        : mapController.camera.zoom;
-
-    AnimationService.animatedMapMove(
-      mapController,
-      _animationController,
-      currentLocation!,
-      targetZoom,
-    );
-
-    // If the requested page is already displayed we do not need to animate.
-    final currentPageIdx = pageController.hasClients
-        ? pageController.page?.round() ?? selectedIndex
-        : selectedIndex;
-
-    if (currentPageIdx != index && pageController.hasClients) {
-      _isPageAnimating = true;
-      pageController
-          .animateToPage(
-      index,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.ease,
-          )
-          .whenComplete(() => _isPageAnimating = false);
+  }
+  
+  void _clearSelection() {
+    if (_selectedMasterId != null || selectedIndex != -1) {
+      setState(() {
+        _selectedMasterId = null;
+        selectedIndex = -1;
+        _createMarkers();
+      });
     }
   }
 
@@ -340,6 +438,8 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
               masters.clear();
               loading = true;
               currentPage = 1;
+              _selectedMasterId = null;
+              selectedIndex = -1;
             });
             if (currentLocation != null) {
               await _loadMapData(currentLocation!);
@@ -371,6 +471,9 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
+                  onTap: (tapPosition, point) {
+                    _clearSelection();
+                  },
                 ),
                 children: [
                   TileLayer(
@@ -385,86 +488,59 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
                   // User location marker
                   if (currentLocation != null)
                     UserLocationMarker(location: currentLocation!),
-                  // Кластерний шар для усіх маркерів (преміум та звичайні)
-                  MarkerClusterLayerWidget(
-                        options: MarkerClusterLayerOptions(
-                          maxClusterRadius: 100,
-                          size: const Size(80, 80),
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.all(50),
-                          maxZoom: 18,
-                          showPolygon: false,
-                          markers: masters,
-                          onClusterTap: (cluster) {
-                            final map = MapViewState.mapController;
-                            final currentZoom = map.camera.zoom;
-                            final targetZoom = (currentZoom + 2).clamp(0.0, 18.0);
-                            map.move(cluster.markers.first.point, targetZoom);
-                          },
-                          spiderfyCluster: false,
-                          builder: (context, markers) {
-                            return ClusterCircle(markers: markers.cast<GarageMarker>());
-                          },
-                          disableClusteringAtZoom: 18,
-                        ),
-                      ),
+                  // Прості маркери без кластеризації
+                  MarkerLayer(markers: masters),
                 ],
               ),
-              DraggableScrollableSheet(
-                controller: sheetController,
-                maxChildSize: 0.31,
-                initialChildSize: 0.31,
-                minChildSize: 0.07,
-                builder: (BuildContext context, scrollController) {
-                  return CustomScrollView(
-                    controller: scrollController,
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.3,
-                          child: PageView.builder(
-                            controller: pageController,
-                            onPageChanged: (value) {
-                              // Ignore callbacks that were triggered by the
-                              // internal animateToPage after tapping a marker.
-                              if (!_isPageAnimating) {
-                              _onMarkerTap(value);
-                              }
-                            },
-                            itemCount: visibleMasters.length,
-                            itemBuilder: (_, index) {
-                              return Stack(
-                                children: [
-                                  MapCard(item: visibleMasters[index]),
-                                  Positioned(
-                                    top: 20,
-                                    left: 0,
-                                    right: 0,
-                                    child: Center(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).hintColor,
-                                          borderRadius: const BorderRadius.all(
-                                            Radius.circular(
-                                              Styles.borderRadius,
-                                            ),
+              if (_selectedMasterId != null &&
+                  visibleMasters.any((m) => m.id == _selectedMasterId))
+                DraggableScrollableSheet(
+                  controller: sheetController,
+                  maxChildSize: 0.31,
+                  initialChildSize: 0.31,
+                  minChildSize: 0.07,
+                  builder: (BuildContext context, scrollController) {
+                    final idx = visibleMasters.indexWhere((m) => m.id == _selectedMasterId);
+                    if (idx == -1) {
+                      return const SizedBox.shrink();
+                    }
+                    final master = visibleMasters[idx];
+                    return CustomScrollView(
+                      controller: scrollController,
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.3,
+                            child: Stack(
+                              children: [
+                                MapCard(item: master),
+                                Positioned(
+                                  top: 20,
+                                  left: 0,
+                                  right: 0,
+                                  child: Center(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).hintColor,
+                                        borderRadius: const BorderRadius.all(
+                                          Radius.circular(
+                                            Styles.borderRadius,
                                           ),
                                         ),
-                                        height: 4,
-                                        width: 40,
                                       ),
+                                      height: 4,
+                                      width: 40,
                                     ),
                                   ),
-                                ],
-                              );
-                            },
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+                      ],
+                    );
+                  },
+                ),
               Positioned(
                 right: 10,
                 top: MediaQuery.of(context).size.height * 0.05,
@@ -573,24 +649,58 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _stopRefreshTimer();
+    if (_isRouteSubscribed) {
+      routeObserver.unsubscribe(this);
+    }
+    WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     _mapSub.cancel();
     pageController.dispose();
     super.dispose();
   }
 
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(refreshInterval, (_) => _softRefreshMasters());
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
   Future<void> _softRefreshMasters() async {
     if (currentLocation == null || !mapWasLoaded) return;
     if (!_controllerReady()) return;
+    if (_softRefreshing) return;
+    _softRefreshing = true;
     final newMasters = await getData(
       currentLocation!.longitude,
       currentLocation!.latitude,
       1,
       mapController.camera.zoom,
     );
+    // Якщо на сервері є пагінація — оновлюємо всі сторінки, щоб статуси були актуальні для всіх майстрів
+    List<Master> aggregated = List.of(newMasters);
+    if (totalPages > 1) {
+      final List<Future<List<Master>>> futures = [];
+      for (int page = 2; page <= totalPages; page++) {
+        futures.add(getData(
+          currentLocation!.longitude,
+          currentLocation!.latitude,
+          page,
+          mapController.camera.zoom,
+        ));
+      }
+      final results = await Future.wait(futures);
+      for (final list in results) {
+        aggregated.addAll(list);
+      }
+    }
+
     // Створюємо мапу для швидкого пошуку по id
-    final Map<int, Master> newMastersMap = {for (var m in newMasters) m.id: m};
+    final Map<int, Master> newMastersMap = {for (var m in aggregated) m.id: m};
     final Map<int, Master> oldMastersMap = {for (var m in mapMasters) m.id: m};
 
     // Оновлюємо статуси та дані для існуючих майстрів
@@ -608,25 +718,20 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
           changed = true;
         }
       } else {
-        // Майстра видалили — позначаємо для видалення
-        mapMasters[i] = old; // можна видалити, якщо потрібно
-        changed = true;
+        // Не видаляємо майстрів у soft-refresh, щоб не було стрибків у UI
       }
     }
     // Додаємо нових майстрів
-    for (final m in newMasters) {
+    for (final m in aggregated) {
       if (!oldMastersMap.containsKey(m.id)) {
         mapMasters.add(m);
         changed = true;
       }
     }
-    // Видаляємо майстрів, яких більше немає
-    mapMasters.removeWhere((m) => !newMastersMap.containsKey(m.id));
     if (changed) {
-      setState(() {
-        _updateVisibleMasters();
-      });
+      _updateVisibleMasters();
     }
+    _softRefreshing = false;
   }
 
   /// Re-evaluates whether the logged-in user is a master and updates the UI.
@@ -646,17 +751,40 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
 
     final zoom = mapController.camera.zoom;
 
-    List<Master> newVisible;
+    _isRefreshing = true;
 
-    
-      newVisible = List.from(mapMasters);
-    
+    List<Master> newVisible = List.from(mapMasters);
+
+    // Determine desired selected id: prefer persisted id; otherwise infer from current index
+    int? desiredSelectedId = _selectedMasterId;
+    // If nothing is selected, keep no selection
+
+    // Compute new index based on desired id; only fall back if that id is missing
+    int newIndex;
+    if (desiredSelectedId != null) {
+      final idx = newVisible.indexWhere((m) => m.id == desiredSelectedId);
+      if (idx != -1) {
+        newIndex = idx;
+      } else {
+        // Selected master disappeared — clear selection
+        newIndex = -1;
+        desiredSelectedId = null;
+      }
+    } else {
+      newIndex = -1;
+    }
+
+    // We don't reorder the list anymore; selection is id-based only
 
     setState(() {
       visibleMasters = newVisible;
+      selectedIndex = newIndex;
+      _selectedMasterId = desiredSelectedId;
       _currentZoom = zoom;
       _createMarkers();
     });
+
+    _isRefreshing = false;
   }
 
   bool _controllerReady() {
@@ -711,6 +839,95 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin {
           },
         ),
       ),
+    );
+  }
+}
+
+class _BouncingDot extends StatefulWidget {
+  final double size;
+  final Color color;
+  final bool bounce;
+  final bool isActive;
+
+  const _BouncingDot({
+    required this.size,
+    required this.color,
+    required this.bounce,
+    required this.isActive,
+  });
+
+  @override
+  State<_BouncingDot> createState() => _BouncingDotState();
+}
+
+class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      lowerBound: 0.0,
+      upperBound: 1.0,
+      value: 0.0,
+    );
+    if (widget.bounce) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _BouncingDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bounce != widget.bounce) {
+      if (widget.bounce) {
+        _controller.repeat(reverse: true);
+      } else {
+        _controller.animateTo(0.0, duration: const Duration(milliseconds: 200));
+        _controller.stop();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, child) {
+        final double progress = widget.bounce ? Curves.easeInOut.transform(_controller.value) : 0.0;
+        final double amplitude = (widget.size * 0.35).clamp(4.0, 12.0);
+        final double dy = -amplitude * progress;
+        return Transform.translate(
+          offset: Offset(0, dy),
+          child: Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              color: widget.color,
+              shape: BoxShape.circle,
+              border: widget.isActive ? Border.all(color: Colors.white, width: 2) : null,
+              boxShadow: widget.isActive
+                  ? [
+                      BoxShadow(
+                        color: (widget.color == Colors.blue ? Colors.blueAccent : Colors.grey)
+                            .withOpacity(0.5),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -122,25 +122,19 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
     } else {
       return Scaffold(
           appBar: AppBar(
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.brightness_6),
-                onPressed: () {
-                  Provider.of<ThemeProvider>(context, listen: false)
-                      .toggleTheme();
-                },
-              ),
-            ],
-            title:
-                Text(FlutterI18n.translate(context, 'summary_info_page.title')),
-            backgroundColor: Theme.of(context).primaryColor,
-            elevation: 8,
-            shadowColor: Colors.transparent,
+            
+            title: Text(
+              FlutterI18n.translate(context, 'summary_info_page.title'),
+              style: TextStyle(color: Styles().titleColor),
+            ),
+            backgroundColor: Styles().primaryColor,
+            iconTheme: IconThemeData(color: Styles().titleColor),
+            actionsIconTheme: IconThemeData(color: Styles().titleColor),
           ),
           body: FadeTransition(
             opacity: _fadeAnimation,
             child: Container(
-              color: Theme.of(context).hoverColor,
+              color: Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: _buildContent(),
@@ -148,23 +142,22 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
             ),
           ),
           bottomNavigationBar: Container(
-            color: Theme.of(context).hoverColor,
+            color: Colors.white,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  backgroundColor: Theme.of(context).primaryColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0),
+                style: ButtonStyle(
+                  backgroundColor: MaterialStateProperty.all(Styles().primaryColor),
+                  shape: MaterialStateProperty.all(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30.0),
+                    ),
                   ),
-                  elevation: 5,
                 ),
                 onPressed: _registerUser,
                 child: Text(
-                  FlutterI18n.translate(
-                      context, 'summary_info_page.register_button'),
-                  style: Theme.of(context).textTheme.labelLarge,
+                  FlutterI18n.translate(context, 'summary_info_page.register_button'),
+                  style: TextStyle(color: Styles().titleColor, fontSize: 24),
                 ),
               ),
             ),
@@ -263,7 +256,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
             width: 100,
             decoration: BoxDecoration(
               color: Styles.textInputColor,
-              borderRadius: BorderRadius.circular(12.0),
+              borderRadius: BorderRadius.circular(Styles.borderRadius),
               boxShadow: [
                 BoxShadow(
                   color: Colors.grey.withOpacity(0.3),
@@ -275,7 +268,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
             ),
             child: _photoFile != null
                 ? ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
+                    borderRadius: BorderRadius.circular(Styles.borderRadius),
                     child: Image.file(
                       _photoFile!,
                       fit: BoxFit.contain,

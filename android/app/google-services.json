@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "78546251315",
-    "project_id": "go-garage-55969",
-    "storage_bucket": "go-garage-55969.firebasestorage.app"
+    "project_number": "876107507388",
+    "project_id": "app-carbeat-online",
+    "storage_bucket": "app-carbeat-online.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:78546251315:android:cb6a1a5a700a107794fd46",
+        "mobilesdk_app_id": "1:876107507388:android:8764651ae8ea51960a92b9",
         "android_client_info": {
-          "package_name": "com.example.garage"
+          "package_name": "online.carbeat.app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB5l5_ODa0FXlINNfy-oIgFXxriUbElEEk"
+          "current_key": "AIzaSyDtJT61hN0MdQBYGeDPePYyyPX9Vr9f8pk"
         }
       ],
       "services": {

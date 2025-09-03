@@ -26,6 +26,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'classes/app_scroll_behavior.dart';
 import 'classes/app_themes.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import 'package:carbeat/navigation/route_observer.dart';
 
 void main() async {
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -122,6 +123,7 @@ class MyAppState extends State<MyApp> {
         return MaterialApp(
           key: key,
           scrollBehavior: AppScrollBehavior(),
+          navigatorObservers: [routeObserver],
           
           localizationsDelegates: [
             FlutterI18nDelegate(

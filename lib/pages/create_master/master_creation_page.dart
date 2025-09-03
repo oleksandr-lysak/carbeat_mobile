@@ -26,6 +26,7 @@ class MasterCreationPageState extends State<MasterCreationPage> {
   // ignore: unused_field
   latlong.LatLng? _selectedLocation;
   DropdownItem? selectedItem;
+  bool _initializedFromArgs = false; // Ensure we only parse route args once
 
   @override
   void dispose() {
@@ -48,8 +49,24 @@ class MasterCreationPageState extends State<MasterCreationPage> {
   Widget build(BuildContext context) {
     // Отримання провайдера
     final serviceProvider = Provider.of<ServiceProvider>(context);
-    _selectedLocation =
-        ModalRoute.of(context)?.settings.arguments as latlong.LatLng;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (!_initializedFromArgs && args != null) {
+      // Initialize from route arguments only once
+      if (args is Map) {
+        final dynamic phoneArg = args['phone'];
+        if (phoneArg is String && _phoneController.text.isEmpty) {
+          _phoneController.text = phoneArg;
+        }
+        final dynamic locationArg = args['location'];
+        if (locationArg is latlong.LatLng) {
+          _selectedLocation = locationArg;
+        }
+      } else if (args is latlong.LatLng) {
+        // Backward compatibility: direct LatLng passed as argument
+        _selectedLocation = args;
+      }
+      _initializedFromArgs = true;
+    }
 
     if (serviceProvider.isLoading) {
       return Scaffold(

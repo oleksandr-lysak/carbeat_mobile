@@ -4,6 +4,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:latlong2/latlong.dart' as latlong;
+import 'package:carbeat/constants/styles.dart';
 
 class PhotoGridPage extends StatefulWidget {
   const PhotoGridPage({super.key});
@@ -107,95 +108,134 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
         (ModalRoute.of(context)?.settings.arguments as List<dynamic>? ?? [])[4]
             as int?;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(FlutterI18n.translate(context, 'choose_photo')),
-        backgroundColor: Theme.of(context).primaryColor,
-        actions: [
-          if (_selectedPhoto != null)
-            IconButton(
-              icon: const Icon(Icons.navigate_next, color: Colors.black),
-              onPressed: () {
-                Navigator.pushNamed(
-                  context,
-                  '/summary-info',
-                  arguments: [
-                    _selectedLocation,
-                    _phone,
-                    _name,
-                    _description,
-                    _specialtyId,
-                    _selectedPhoto?.id,
-                  ],
-                );
-              },
-            ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 4.0,
-            mainAxisSpacing: 4.0,
+    return Stack(children: [
+      Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar
+        (
+          title: Text(
+            FlutterI18n.translate(context, 'choose_photo'),
+            style: TextStyle(color: Styles().titleColor),
           ),
-          itemCount: _photos.length + 1, // +1 для іконки камери
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return GestureDetector(
-                onTap: _pickCameraImage,
-                child: Container(
-                  color: Theme.of(context).hoverColor,
-                  child: Icon(Icons.camera_alt,
-                      size: 50, color: Theme.of(context).primaryColor),
-                ),
-              );
-            } else {
-              final photo = _photos[index - 1];
-              return GestureDetector(
-                onTap: () => _onPhotoTapped(photo),
-                child: Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(8.0), // Додає округлені кути
-                      child: FutureBuilder<File?>(
-                        future: photo.file,
-                        builder: (context, snapshot) {
-                          final file = snapshot.data;
-                          if (file == null) return const SizedBox();
-                          return Image.file(
-                            file,
-                            fit: BoxFit
-                                .cover, // Зміна BoxFit для кращого відображення
-                            width: double.infinity,
-                            height: double.infinity,
-                          );
-                        },
-                      ),
+          backgroundColor: Styles().primaryColor,
+          iconTheme: IconThemeData(color: Styles().titleColor),
+          actionsIconTheme: IconThemeData(color: Styles().titleColor),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8.0,
+              mainAxisSpacing: 8.0,
+            ),
+            itemCount: _photos.length + 1, // +1 для іконки камери
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return GestureDetector(
+                  onTap: _pickCameraImage,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Styles().backgroundFormColor,
+                      borderRadius: BorderRadius.circular(Styles.borderRadius),
                     ),
-                    if (_selectedPhoto == photo)
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(4.0),
-                          color: Colors.black54,
-                          child: const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 24.0, // Розмір галочки
+                    child: Center(
+                      child: Icon(Icons.camera_alt,
+                          size: 40, color: Styles().primaryColor),
+                    ),
+                  ),
+                );
+              } else {
+                final photo = _photos[index - 1];
+                final bool isSelected = _selectedPhoto == photo;
+                return GestureDetector(
+                  onTap: () => _onPhotoTapped(photo),
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(Styles.borderRadius),
+                          border: isSelected
+                              ? Border.all(color: Styles.selectedBorder, width: 2)
+                              : null,
+                        ),
+                        child: ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(Styles.borderRadius),
+                          child: FutureBuilder<File?>(
+                            future: photo.file,
+                            builder: (context, snapshot) {
+                              final file = snapshot.data;
+                              if (file == null) return const SizedBox();
+                              return Image.file(
+                                file,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              );
+                            },
                           ),
                         ),
                       ),
-                  ],
-                ),
-              );
-            }
-          },
+                      if (isSelected)
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Container(
+                            padding: const EdgeInsets.all(4.0),
+                            decoration: BoxDecoration(
+                              color: Styles.selectedColor.withOpacity(0.7),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.check,
+                              color: Styles().titleColor,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }
+            },
+          ),
         ),
       ),
-    );
+      Positioned(
+        left: MediaQuery.of(context).size.width * 0.3,
+        right: MediaQuery.of(context).size.width * 0.3,
+        bottom: MediaQuery.of(context).size.height * 0.02,
+        child: ElevatedButton(
+          style: ButtonStyle(
+            backgroundColor: MaterialStateProperty.all(Styles().primaryColor),
+            shape: MaterialStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30.0),
+              ),
+            ),
+          ),
+          onPressed: () {
+            if (_selectedPhoto == null) return;
+            Navigator.pushNamed(
+              context,
+              '/summary-info',
+              arguments: [
+                _selectedLocation,
+                _phone,
+                _name,
+                _description,
+                _specialtyId,
+                _selectedPhoto?.id,
+              ],
+            );
+          },
+          child: Text(
+            '${FlutterI18n.translate(context, 'next')} ...',
+            style: TextStyle(color: Styles().titleColor, fontSize: 24),
+          ),
+        ),
+      ),
+    ],);
   }
 }

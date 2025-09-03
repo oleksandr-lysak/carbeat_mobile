@@ -41,29 +41,29 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyB2IUyxQqBUYLnq_JPv7HbafJIWeh7YPZs',
-    appId: '1:78546251315:web:23fc3b60ab8e362a94fd46',
-    messagingSenderId: '78546251315',
-    projectId: 'go-garage-55969',
-    authDomain: 'go-garage-55969.firebaseapp.com',
-    storageBucket: 'go-garage-55969.firebasestorage.app',
-    measurementId: 'G-6S6QKW1DJ4',
+    apiKey: 'AIzaSyCbfXUkMdhuGjE-OZALryF94etoZVXliAQ',
+    appId: '1:876107507388:web:f2e8b3f90d53b0640a92b9',
+    messagingSenderId: '876107507388',
+    projectId: 'app-carbeat-online',
+    authDomain: 'app-carbeat-online.firebaseapp.com',
+    storageBucket: 'app-carbeat-online.firebasestorage.app',
+    measurementId: 'G-7F65TPP9HN',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyB5l5_ODa0FXlINNfy-oIgFXxriUbElEEk',
-    appId: '1:78546251315:android:cb6a1a5a700a107794fd46',
-    messagingSenderId: '78546251315',
-    projectId: 'go-garage-55969',
-    storageBucket: 'go-garage-55969.firebasestorage.app',
+    apiKey: 'AIzaSyDtJT61hN0MdQBYGeDPePYyyPX9Vr9f8pk',
+    appId: '1:876107507388:android:8764651ae8ea51960a92b9',
+    messagingSenderId: '876107507388',
+    projectId: 'app-carbeat-online',
+    storageBucket: 'app-carbeat-online.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyD6d1yoAmhL8ey816JLQW6lArgORA2YQuQ',
-    appId: '1:78546251315:ios:ca697624ab2ee10294fd46',
-    messagingSenderId: '78546251315',
-    projectId: 'go-garage-55969',
-    storageBucket: 'go-garage-55969.firebasestorage.app',
+    apiKey: 'AIzaSyD5Ihgk2fzEKJSVxQobnGpodRXSqrSRI2Y',
+    appId: '1:876107507388:ios:75d75d2b30f670e10a92b9',
+    messagingSenderId: '876107507388',
+    projectId: 'app-carbeat-online',
+    storageBucket: 'app-carbeat-online.firebasestorage.app',
     iosBundleId: 'com.example.garagePlantMobile',
   );
 

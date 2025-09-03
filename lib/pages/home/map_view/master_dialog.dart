@@ -116,7 +116,11 @@ void _showOtpDialog(BuildContext context, String phone, bool needsRegistration, 
                   }
 
                   if (needsRegistration) {
-                    Navigator.pushReplacementNamed(ctx, '/create-master');
+                    Navigator.pushReplacementNamed(
+                      ctx,
+                      '/map-picker',
+                      arguments: {'phone': phone},
+                    );
                   } else {
                     User? user = await UserService().getUser();
                     if (user != null && ctx.mounted) {

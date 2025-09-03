@@ -52,7 +52,7 @@ class MapCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      item.name,
+                      item.name.length > 20 ? '${item.name.substring(0, 22)}...' : item.name,
                       style: TextStyle(
                         fontSize: 24,
                         color: Styles().titleColor,
