@@ -38,36 +38,11 @@ class AuthService {
     final tokenService = TokenService();
     await tokenService.saveTokens(accessToken, refreshToken);
 
-    final int userId = response['user']['id'];
-    final String userName = response['user']['name'];
-    final masterData = response['user']['master'];
-    Map<String, dynamic>? jsonMaster;
-    if (masterData != null) {
-      jsonMaster = {
-        'id': masterData['id'],
-        'name': masterData['name'],
-        'description': masterData['description'],
-        'photo': masterData['photo'],
-        'phone': masterData['phone'],
-        'address': masterData['address'],
-        'services': masterData['services'],
-        'speciality_id': masterData['speciality_id'],
-        'age': masterData['age'],
-        'longitude': masterData['longitude'],
-        'latitude': masterData['latitude'],
-        'tariff_id': masterData['tariff_id'],
-      };
-    }
-    Map<String, dynamic> jsonUser = {
-      'id': userId,
-      'name': userName,
-      'phone': phone,
-      'master': jsonMaster,
-    };
-
-    final User user = User.fromJson(jsonUser);
-    UserService userService = UserService();
-    await userService.saveUserData(user);
+    // Fetch full user from auth/me to ensure latest fields like master.main_photo
+    final me = await apiService.getRequest('auth/me');
+    final userJson = me.containsKey('user') ? me['user'] : me;
+    final User user = User.fromJson(userJson as Map<String, dynamic>);
+    await UserService().saveUserData(user);
     return true;
   }
 
@@ -86,7 +61,11 @@ class AuthService {
       final tokenService = Provider.of<TokenService>(context, listen: false);
       final userService = Provider.of<UserService>(context, listen: false);
       await tokenService.saveToken(token);
-      User user = User.fromJson(response['user']);
+
+      // Refresh full user after registration
+      final me = await apiService.getRequest('auth/me');
+      final freshUserJson = me.containsKey('user') ? me['user'] : me;
+      User user = User.fromJson(freshUserJson as Map<String, dynamic>);
       await userService.saveUserData(user);
     } catch (e) {
       if (e is DioException && e.response?.statusCode == 422) {

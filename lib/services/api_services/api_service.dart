@@ -107,7 +107,7 @@ class ApiService {
   Future<bool> _refreshToken() async {
     final tokenService = TokenService();
     String? refreshToken = await tokenService.getRefreshToken();
-    if (refreshToken == null) return false;
+    if (refreshToken == null || refreshToken.isEmpty) return false;
     try {
       final response = await dio.post('$apiUrl/auth/refresh', data: {
         'refresh_token': refreshToken,
@@ -222,6 +222,28 @@ class ApiService {
         return _handleErrorResponse(e.response);
       }
       throw Exception('PUT request error($url): $e');
+    }
+  }
+
+  /// DELETE request
+  Future<Map<String, dynamic>> deleteRequest(String endpoint,
+      {Map<String, String>? headers}) async {
+    String url = '$apiUrl$endpoint';
+    try {
+      await _addHeaders(headers);
+      final response = await _performRequest(() => dio.delete(url));
+
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+
+      return _handleErrorResponse(response);
+    } catch (e) {
+      if (e is DioException) {
+        return _handleErrorResponse(e.response);
+      }
+
+      throw Exception('DELETE request error($url): $e');
     }
   }
 }

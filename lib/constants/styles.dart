@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 class Styles {
   static const backgroundColor = Color.fromARGB(255, 33, 32, 32);
-  Color primaryColor = const Color.fromARGB(255, 123, 172, 218).withOpacity(0.8);
+  //Color primaryColor = const Color.fromARGB(255, 123, 172, 218).withOpacity(0.8);
+  Color primaryColor = const Color.fromARGB(255, 123, 172, 218);
   Color titleColor = Colors.white;
   static const subtitleColor = Colors.white70;
   static const descriptionColor = Colors.white70;

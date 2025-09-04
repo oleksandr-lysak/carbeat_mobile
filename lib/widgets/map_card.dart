@@ -14,7 +14,7 @@ class MapCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     String description = item.description;
-    String photo = AppConstants.publicServerUrl + item.photo;
+    String photo = AppConstants.publicServerUrl + item.mainPhoto;
     if (description.length > 200) {
       description = '${description.substring(0, 200)}...';
     }

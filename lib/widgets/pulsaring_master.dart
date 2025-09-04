@@ -91,8 +91,8 @@ class PulsatingIconState extends State<PulsatingMaster>
         : 'assets/icons/location.svg';
 
     // Формуємо повний URL для фото
-    String photoUrl = widget.master.photo.isNotEmpty
-        ? '${AppConstants.publicServerUrl}${widget.master.photo}'
+    String photoUrl = widget.master.mainPhoto.isNotEmpty
+        ? '${AppConstants.publicServerUrl}${widget.master.mainPhoto}'
         : '';
 
     // Determine border styling according to tariff & availability.

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,6 +15,8 @@ import 'package:provider/provider.dart';
 //import '../services/api_services/auth_service.dart';
 import 'app_toast.dart';
 import '../utils/phone_validator.dart';
+import 'package:image/image.dart' as img;
+import 'package:carbeat/utils/image_utils.dart';
 
 class MasterProfileSheet extends StatefulWidget {
   const MasterProfileSheet({super.key});
@@ -157,15 +160,58 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
 
   Future<void> _pickAvatar() async {
     final picker = ImagePicker();
-    final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (img == null) return;
-    final bytes = await img.readAsBytes();
-    setState(() => _avatarBase64 = 'data:image/jpeg;base64,${base64Encode(bytes)}');
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 100);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final processed = await _processSquareUnder500kb(bytes);
+    setState(() => _avatarBase64 = 'data:image/jpeg;base64,${base64Encode(processed)}');
+  }
+
+  // DEPRECATED: use processSquareUnderBytes from image_utils.dart instead
+  Future<List<int>> _processSquareUnder500kb(Uint8List inputBytes) async {
+    final original = img.decodeImage(inputBytes);
+    if (original == null) return inputBytes;
+
+    final int side = original.width < original.height ? original.width : original.height;
+    final int offsetX = (original.width - side) ~/ 2;
+    final int offsetY = (original.height - side) ~/ 2;
+    img.Image current = img.copyCrop(original, x: offsetX, y: offsetY, width: side, height: side);
+
+    const int maxSide = 1024;
+    if (current.width > maxSide || current.height > maxSide) {
+      current = img.copyResize(current, width: maxSide, height: maxSide);
+    }
+
+    const int targetBytes = 500 * 1024;
+    int quality = 90;
+    List<int> encoded = img.encodeJpg(current, quality: quality);
+    while (encoded.length > targetBytes && quality > 30) {
+      quality -= 10;
+      encoded = img.encodeJpg(current, quality: quality);
+    }
+
+    int resizeSide = current.width;
+    while (encoded.length > targetBytes && resizeSide > 400) {
+      resizeSide = (resizeSide * 0.85).toInt();
+      current = img.copyResize(current, width: resizeSide, height: resizeSide);
+      quality = (quality - 5).clamp(30, 90);
+      encoded = img.encodeJpg(current, quality: quality);
+    }
+
+    return encoded;
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final api = ApiService(AppConstants.serverUrl);
+
+    // Ensure avatar prepared and under 500KB
+    if (_avatarBase64 != null && _avatarBase64!.isNotEmpty) {
+      final raw = base64Decode(_avatarBase64!.split(',').last);
+      final processed = await _processSquareUnder500kb(raw);
+      _avatarBase64 = 'data:image/jpeg;base64,${base64Encode(processed)}';
+    }
+
     final body = {
       'contact_phone': _phoneCtrl.text,
       'description': _descrCtrl.text,

@@ -30,6 +30,9 @@ import 'package:carbeat/services/user_service.dart';
 import 'package:carbeat/widgets/cluster_circle.dart';
 import 'package:carbeat/widgets/master_profile_sheet.dart';
 import 'package:carbeat/navigation/route_observer.dart';
+import 'package:carbeat/widgets/master_registration_flow_sheet.dart';
+import 'package:carbeat/services/api_services/api_service.dart';
+import 'package:carbeat/widgets/app_toast.dart';
  
  
  class MapView extends StatefulWidget {
@@ -80,6 +83,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   // Indicates whether the current logged-in user has a linked master profile.
   bool _isMaster = false;
   String? _masterPhoto;
+  bool _isAvailable = false;
 
   // Cached zoom level so we can detect threshold crossings.
   double _currentZoom = 0;
@@ -217,8 +221,24 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     String url = '${serverUrl}masters?';
     url += params.entries.map((e) => "${e.key}=${e.value}").join('&');
 
-    Response response = await dio.get('$url&per_page=1000');
-    apiData = response.data;
+    try {
+      Response response = await dio.get('$url&per_page=1000');
+      apiData = response.data;
+    } on DioException catch (_) {
+      if (!mounted) return [];
+      setState(() {
+        loading = false;
+      });
+      AppToast.show('Сервер тимчасово недоступний. Спробуйте пізніше.', background: Colors.red);
+      return [];
+    } catch (_) {
+      if (!mounted) return [];
+      setState(() {
+        loading = false;
+      });
+      AppToast.show('Виникла помилка під час завантаження.', background: Colors.red);
+      return [];
+    }
     
     var tagObjsJson = apiData["masters"]["data"] as List;
     List<Master> tagObjs = await compute(parseMasters, tagObjsJson);
@@ -290,13 +310,14 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     masters = [];
     final Set<int> seenMasterIds = {};
     final double zoom = _controllerReady() ? mapController.camera.zoom : 12;
-    final bool showDetailedMarkers = zoom > _markerDetailZoomThreshold;
+    final bool zoomAllowsDetail = zoom > _markerDetailZoomThreshold;
+    GarageMarker? selectedMarker;
     for (int i = 0; i < visibleMasters.length; i++) {
       final master = visibleMasters[i];
       if (seenMasterIds.contains(master.id)) continue;
       seenMasterIds.add(master.id);
       final bool isActive = i == selectedIndex;
-      final double markerSize = showDetailedMarkers
+      final double markerSize = (master.available || zoomAllowsDetail)
           ? (isActive ? 52.0 : 40.0)
           : (isActive ? 20.0 : 12.0);
       final marker = GarageMarker(
@@ -320,7 +341,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                 child: child,
               ),
             ),
-            child: showDetailedMarkers
+            child: (master.available || zoomAllowsDetail)
                 ? Container(
                     key: ValueKey('detailed_${master.id}_${master.available ? 1 : 0}'),
                     child: AnimatedScale(
@@ -360,17 +381,23 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                     child: Center(
                       child: _BouncingDot(
                         size: markerSize,
-                        color: master.available ? Colors.blue : Colors.grey,
+                        color: Colors.blue,
                         isActive: isActive,
-                        bounce: master.available,
+                        bounce: false,
                       ),
                     ),
                   ),
           ),
         ),
       );
-
-      masters.add(marker);
+      if (isActive) {
+        selectedMarker = marker;
+      } else {
+        masters.add(marker);
+      }
+    }
+    if (selectedMarker != null) {
+      masters.add(selectedMarker!);
     }
   }
 
@@ -405,6 +432,123 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     );
   }
 
+  void _showList() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Styles().primaryColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final mastersToShow = List<Master>.from(visibleMasters);
+        // Compute distance (km) from current location and sort: available first, then by distance asc
+        final Distance distanceCalc = Distance();
+        final List<Map<String, dynamic>> items = mastersToShow.map((m) {
+          final double km = (currentLocation != null)
+              ? distanceCalc.as(LengthUnit.Kilometer, currentLocation!, m.location)
+              : double.infinity;
+          return {'master': m, 'km': km, 'available': m.available};
+        }).toList();
+        items.sort((a, b) {
+          final bool aAvail = a['available'] as bool;
+          final bool bAvail = b['available'] as bool;
+          if (aAvail != bAvail) return aAvail ? -1 : 1;
+          return (a['km'] as double).compareTo(b['km'] as double);
+        });
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).hintColor,
+                    borderRadius: const BorderRadius.all(Radius.circular(8)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Masters (${items.length})',
+                        style:  TextStyle(fontSize: 20, fontWeight: FontWeight.w600, 
+                        color: Styles().titleColor),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Styles().titleColor),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final m = items[index]['master'] as Master;
+                      final double km = items[index]['km'] as double;
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.grey.shade200,
+                          foregroundImage: (m.mainPhoto.isNotEmpty)
+                              ? NetworkImage(_buildPhotoUrl(m.mainPhoto))
+                              : null,
+                          child: const Icon(Icons.person, color: Colors.grey),
+                        ),
+                        title: Text(m.name, style: TextStyle(color: Styles().titleColor)),
+                        subtitle: Row(
+                          children: [
+                            if (m.available)
+                               Padding(
+                                padding: EdgeInsets.only(right: 8.0),
+                                child: Icon(Icons.circle, color: Styles().checkColor, size: 10),
+                              ),
+                            Flexible(
+                              child: 
+                              Text('~${km.isFinite ? km.toStringAsFixed(2) : '--'} km', 
+                              maxLines: 1, overflow: TextOverflow.ellipsis, 
+                              style: TextStyle(color: Styles().backgroundFormColor))
+                              ),
+                            const SizedBox(width: 8),
+                            Text('${m.rating.toStringAsFixed(1)}★'),
+                          ],
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.pop(context);
+                          final idx = visibleMasters.indexWhere((vm) => vm.id == m.id);
+                          if (idx != -1) {
+                            _onMarkerTap(idx);
+                            AnimationService.animatedMapMove(
+                              mapController,
+                              _animationController,
+                              m.location,
+                              17,
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
   void _showFilterDialog() async {
     final serviceProvider = Provider.of<ServiceProvider>(
       context,
@@ -492,55 +636,6 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   MarkerLayer(markers: masters),
                 ],
               ),
-              if (_selectedMasterId != null &&
-                  visibleMasters.any((m) => m.id == _selectedMasterId))
-                DraggableScrollableSheet(
-                  controller: sheetController,
-                  maxChildSize: 0.31,
-                  initialChildSize: 0.31,
-                  minChildSize: 0.07,
-                  builder: (BuildContext context, scrollController) {
-                    final idx = visibleMasters.indexWhere((m) => m.id == _selectedMasterId);
-                    if (idx == -1) {
-                      return const SizedBox.shrink();
-                    }
-                    final master = visibleMasters[idx];
-                    return CustomScrollView(
-                      controller: scrollController,
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.3,
-                            child: Stack(
-                              children: [
-                                MapCard(item: master),
-                                Positioned(
-                                  top: 20,
-                                  left: 0,
-                                  right: 0,
-                                  child: Center(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).hintColor,
-                                        borderRadius: const BorderRadius.all(
-                                          Radius.circular(
-                                            Styles.borderRadius,
-                                          ),
-                                        ),
-                                      ),
-                                      height: 4,
-                                      width: 40,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
               Positioned(
                 right: 10,
                 top: MediaQuery.of(context).size.height * 0.05,
@@ -563,6 +658,20 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                         onAuthorized: () {
                           _updateMasterStatus();
                         },
+                        onStartRegistration: (phone) {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.black.withOpacity(0.35),
+                            builder: (_) => MasterRegistrationFlowSheet(
+                              phone: phone,
+                              parentContext: context,
+                            ),
+                          ).then((_) {
+                            // After registration flow closes, refresh master status
+                            _updateMasterStatus();
+                          });
+                        },
                       );
                     }
                     //Navigator.pushNamed(context, '/map-picker');
@@ -574,19 +683,31 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   child: _buildMasterFabChild(),
                 ),
               ),
+              // Positioned(
+              //   right: 250,
+              //   top: MediaQuery.of(context).size.height * 0.05,
+              //   //bottom: MediaQuery.of(context).size.height * 0.3 + 165,
+              //   child: FloatingActionButton(
+              //     onPressed: _moveToCurrentLocation,
+              //     backgroundColor: Styles().primaryColor,
+              //     elevation: 10.0,
+              //     child: Icon(Icons.my_location, color: Styles().titleColor),
+              //   ),
+              // ),
               Positioned(
-                right: 10,
-                bottom: MediaQuery.of(context).size.height * 0.3 + 165,
+                left: 10,
+                top: MediaQuery.of(context).size.height * 0.05,
+                //bottom: MediaQuery.of(context).size.height * 0.3 + 165,
                 child: FloatingActionButton(
-                  onPressed: _moveToCurrentLocation,
+                  onPressed: _showList,
                   backgroundColor: Styles().primaryColor,
                   elevation: 10.0,
-                  child: Icon(Icons.my_location, color: Styles().titleColor),
+                  child: Icon(Icons.list, color: Styles().titleColor),
                 ),
               ),
               Positioned(
-                right: 10,
-                bottom: MediaQuery.of(context).size.height * 0.3 + 235,
+                left: 80,
+                top: MediaQuery.of(context).size.height * 0.05,
                 child: FloatingActionButton(
                   heroTag: 'filter_fab',
                   onPressed: _showFilterDialog,
@@ -595,53 +716,93 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   child: Icon(Icons.filter_alt, color: Styles().titleColor),
                 ),
               ),
-              Positioned(
-                right: 10,
-                bottom: MediaQuery.of(context).size.height * 0.3 + 30,
-                child: Column(
-                  children: [
-                    FloatingActionButton(
-                      heroTag: 'zoom_in_fab',
-                      onPressed: () {
-                        final zoom = mapController.camera.zoom + 1;
-                        mapController.move(mapController.camera.center, zoom);
-                      },
-                      backgroundColor: Styles().primaryColor,
-                      elevation: 10.0,
-                      child: Icon(Icons.zoom_in, color: Styles().titleColor),
-                    ),
-                    const SizedBox(height: 10),
-                    FloatingActionButton(
-                      heroTag: 'zoom_out_fab',
-                      onPressed: () {
-                        final zoom = mapController.camera.zoom - 1;
-                        mapController.move(mapController.camera.center, zoom);
-                      },
-                      backgroundColor: Styles().primaryColor,
-                      elevation: 10.0,
-                      child: Icon(Icons.zoom_out, color: Styles().titleColor),
-                    ),
-                  ],
-                ),
-              ),
+              
               // Extra button allowing masters to toggle their availability.
               if (_isMaster)
                 Positioned(
-                  right: 10,
-                  bottom: MediaQuery.of(context).size.height * 0.3 + 300,
-                  child: FloatingActionButton(
-                    heroTag: 'become_available_fab',
-                    onPressed: () {
-                      // TODO: Implement availability toggling logic.
-                    },
+                  right: 80,
+                  top: MediaQuery.of(context).size.height * 0.05,
+                  child: FloatingActionButton.extended(
+                    heroTag: 'availability_fab',
+                    onPressed: _toggleAvailability,
                     backgroundColor: Styles().primaryColor,
                     elevation: 10.0,
-                    child: Icon(
-                      Icons.toggle_on,
-                      color: Styles().titleColor,
+                    icon: Icon(
+                      _isAvailable ? Icons.toggle_on : Icons.toggle_off,
+                      color: _isAvailable ? Colors.greenAccent : Colors.grey,
+                      size: 28,
+                    ),
+                    label: Text(
+                      _isAvailable ? 'Стати зайнятим' : 'Стати доступним',
+                      style: TextStyle(color: Styles().titleColor),
                     ),
                   ),
                 ),
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) {
+                    final offsetAnimation = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
+                        .chain(CurveTween(curve: Curves.easeOutCubic))
+                        .animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(position: offsetAnimation, child: child),
+                    );
+                  },
+                  child: (_selectedMasterId != null && visibleMasters.any((m) => m.id == _selectedMasterId))
+                      ? DraggableScrollableSheet(
+                          key: ValueKey('sheet_${_selectedMasterId}'),
+                          maxChildSize: 0.31,
+                          initialChildSize: 0.31,
+                          minChildSize: 0.07,
+                          builder: (BuildContext context, scrollController) {
+                            final idx = visibleMasters.indexWhere((m) => m.id == _selectedMasterId);
+                            if (idx == -1) {
+                              return const SizedBox.shrink();
+                            }
+                            final master = visibleMasters[idx];
+                            return CustomScrollView(
+                              controller: scrollController,
+                              slivers: [
+                                SliverToBoxAdapter(
+                                  child: SizedBox(
+                                    height: MediaQuery.of(context).size.height * 0.3,
+                                    child: Stack(
+                                      children: [
+                                        MapCard(item: master),
+                                        Positioned(
+                                          top: 20,
+                                          left: 0,
+                                          right: 0,
+                                          child: Center(
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).hintColor,
+                                                borderRadius: const BorderRadius.all(
+                                                  Radius.circular(
+                                                    Styles.borderRadius,
+                                                  ),
+                                                ),
+                                              ),
+                                              height: 4,
+                                              width: 40,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
             ],
           ),
         );
@@ -713,7 +874,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
         if (old.available != updated.available ||
             old.location != updated.location ||
             old.rating != updated.rating ||
-            old.photo != updated.photo) {
+            old.mainPhoto != updated.mainPhoto) {
           mapMasters[i] = updated;
           changed = true;
         }
@@ -740,8 +901,198 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     if (!mounted) return;
     setState(() {
       _isMaster = user?.master != null;
-      _masterPhoto = user?.master?.photo;
+      _masterPhoto = user?.master?.mainPhoto;
     });
+    await _refreshOwnAvailabilityFromServer();
+  }
+
+  Future<void> _refreshOwnAvailabilityFromServer() async {
+    final user = await UserService().getUser();
+    if (user?.master == null) {
+      if (!mounted) return;
+      setState(() {
+        _isAvailable = false;
+      });
+      return;
+    }
+    try {
+      final api = ApiService(AppConstants.serverUrl);
+      final res = await api.getRequest('masters/${user!.master!.id}/availability');
+      bool serverAvailable = false;
+      if (res is Map) {
+        if (res.containsKey('available')) {
+          final val = res['available'];
+          if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+        } else if (res.containsKey('availability')) {
+          final val = res['availability'];
+          if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+        } else if (res.containsKey('data')) {
+          final data = res['data'];
+          if (data is Map) {
+            if (data.containsKey('available')) {
+              final val = data['available'];
+              if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+            } else if (data.containsKey('availability')) {
+              final val = data['availability'];
+              if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+            }
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _isAvailable = serverAvailable;
+      });
+    } catch (_) {
+      // Ignore errors; keep previous state
+    }
+  }
+
+  Future<void> _toggleAvailability() async {
+    final user = await UserService().getUser();
+    if (user?.master == null) return;
+    try {
+      final api = ApiService(AppConstants.serverUrl);
+      if (_isAvailable) {
+        await api.deleteRequest('masters/${user!.master!.id}/availability');
+        await _refreshOwnAvailabilityFromServer();
+        await _softRefreshMasters();
+        if (!mounted) return;
+        AppToast.show('Ви стали зайнятими', background: Colors.green,duration: Duration(seconds: 5));
+      } else {
+        _showAvailabilitySheet();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show('Не вдалося оновити доступність', background: Colors.red,duration: Duration(seconds: 5));
+    }
+  }
+
+  void _showAvailabilitySheet() {
+    int minutes = 60;
+    final TextEditingController ctrl = TextEditingController(text: minutes.toString());
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Styles().primaryColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            top: 12,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).hintColor,
+                    borderRadius: const BorderRadius.all(Radius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Стати вільним',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Styles().titleColor),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: ctrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Styles().titleColor,
+                        labelText: 'Тривалість (хв)',
+                      ),
+                      onChanged: (val) {
+                        final n = int.tryParse(val);
+                        if (n != null && n > 0) minutes = n;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {
+                          minutes += 30;
+                          ctrl.text = minutes.toString();
+                        },
+                        child: const Text('+30'),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          minutes = (minutes - 30).clamp(30, 24 * 60);
+                          ctrl.text = minutes.toString();
+                        },
+                        child: const Text('-30'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('Скасувати', style: TextStyle(color: Styles().titleColor)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final n = int.tryParse(ctrl.text) ?? minutes;
+                        final duration = n > 0 ? n : 60;
+                        Navigator.pop(ctx);
+                        await _setAvailability(duration);
+                      },
+                      child: Text('Стати вільним', style: TextStyle(color: Styles().titleColor)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _setAvailability(int durationMinutes) async {
+    final user = await UserService().getUser();
+    if (user?.master == null) return;
+    try {
+      final api = ApiService(AppConstants.serverUrl);
+      final now = DateTime.now().toIso8601String();
+      await api.postRequest('masters/${user!.master!.id}/availability', {
+        'start_time': now,
+        'duration': durationMinutes,
+      });
+      await _refreshOwnAvailabilityFromServer();
+      await _softRefreshMasters();
+      if (!mounted) return;
+      AppToast.show('Ви стали вільним на $durationMinutes хв', background: Colors.green,duration: Duration(seconds: 5));
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show('Не вдалося встановити доступність', background: Colors.red,duration: Duration(seconds: 5));
+    }
   }
 
   /// Applies zoom-based filtering rules and rebuilds markers/clustering flags.
@@ -798,9 +1149,9 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
 
   String _buildPhotoUrl(String path) {
     if (path.startsWith('http')) return path;
-    final base = AppConstants.serverUrl.endsWith('/')
-        ? AppConstants.serverUrl.substring(0, AppConstants.serverUrl.length - 1)
-        : AppConstants.serverUrl;
+    final base = AppConstants.publicServerUrl.endsWith('/')
+        ? AppConstants.publicServerUrl.substring(0, AppConstants.publicServerUrl.length - 1)
+        : AppConstants.publicServerUrl;
     return path.startsWith('/') ? '$base$path' : '$base/$path';
   }
 
@@ -913,7 +1264,7 @@ class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderSta
             decoration: BoxDecoration(
               color: widget.color,
               shape: BoxShape.circle,
-              border: widget.isActive ? Border.all(color: Colors.white, width: 2) : null,
+              border: Border.all(color: Colors.white, width: widget.isActive ? 2 : 1),
               boxShadow: widget.isActive
                   ? [
                       BoxShadow(

@@ -7,7 +7,7 @@ import 'package:carbeat/widgets/loading.dart';
 import 'package:provider/provider.dart'; 
 import 'package:carbeat/providers/service_provider.dart';
 import 'package:latlong2/latlong.dart' as latlong;
-import 'package:carbeat/utils/phone_validator.dart';
+// import 'package:carbeat/utils/phone_validator.dart';
 
 
 
@@ -93,20 +93,24 @@ class MasterCreationPageState extends State<MasterCreationPage> {
             key: _formKey,
             child: ListView(
               children: [
-                AnimatedTextField(
-                  controller: _phoneController,
-                  labelText: '${FlutterI18n.translate(context, 'phone')} (+380 xxx xx xx)',
-                  hintText: FlutterI18n.translate(context, 'enter_phone'),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return FlutterI18n.translate(context, 'required');
-                    }
-                    if (!PhoneValidator.validate(value)) {
-                      return FlutterI18n.translate(context, 'invalid_phone');
-                    }
-                    return null;
-                  },
+                Row(
+                  children: [
+                    
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: Styles().backgroundFormColor,
+                          borderRadius: BorderRadius.circular(Styles.borderRadius),
+                        ),
+                        child: Text(
+                          _phoneController.text,
+                          style: const TextStyle(fontSize: 16, color: Colors.blueGrey),
+
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 AnimatedTextField(

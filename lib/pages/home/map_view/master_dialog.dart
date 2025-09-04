@@ -8,7 +8,7 @@ import '../../../services/user_service.dart';
 import '../../../models/user.dart';
 import '../../../utils/phone_validator.dart';
 
-void showMasterDialog(BuildContext context, {VoidCallback? onAuthorized}) {
+void showMasterDialog(BuildContext context, {VoidCallback? onAuthorized, void Function(String phone)? onStartRegistration}) {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController phoneController = TextEditingController();
 
@@ -57,7 +57,7 @@ void showMasterDialog(BuildContext context, {VoidCallback? onAuthorized}) {
               if (!ctx.mounted) return;
               Navigator.pop(ctx); // close phone dialog
 
-              _showOtpDialog(ctx, phone, needsRegistration, onAuthorized);
+              _showOtpDialog(ctx, phone, needsRegistration, onAuthorized, onStartRegistration);
             },
           ),
         ],
@@ -66,7 +66,7 @@ void showMasterDialog(BuildContext context, {VoidCallback? onAuthorized}) {
   );
 }
 
-void _showOtpDialog(BuildContext context, String phone, bool needsRegistration, VoidCallback? onAuthorized) {
+void _showOtpDialog(BuildContext context, String phone, bool needsRegistration, VoidCallback? onAuthorized, void Function(String phone)? onStartRegistration) {
   final TextEditingController codeController = TextEditingController();
   showDialog(
     context: context,
@@ -116,11 +116,16 @@ void _showOtpDialog(BuildContext context, String phone, bool needsRegistration, 
                   }
 
                   if (needsRegistration) {
+                    Navigator.pop(ctx);
+                    if (onStartRegistration != null) {
+                      onStartRegistration(phone);
+                    } else {
                     Navigator.pushReplacementNamed(
                       ctx,
                       '/map-picker',
                       arguments: {'phone': phone},
                     );
+                    }
                   } else {
                     User? user = await UserService().getUser();
                     if (user != null && ctx.mounted) {

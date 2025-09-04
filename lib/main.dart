@@ -102,6 +102,14 @@ class MyApp extends StatefulWidget {
 class MyAppState extends State<MyApp> {
   Key key = UniqueKey();
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FCMService.initializeFCM(context: context);
+    });
+  }
+
   void restartApp() {
     setState(() {
       key = UniqueKey();
@@ -116,7 +124,6 @@ class MyAppState extends State<MyApp> {
     statusBarIconBrightness: Brightness.dark,
   ),
 );
-    FCMService.initializeFCM(context: context);
     return Consumer<ThemeProvider>(builder: (context, themeProvider, child) {
       return Consumer<LanguageProvider>(
           builder: (context, languageProvider, child) {

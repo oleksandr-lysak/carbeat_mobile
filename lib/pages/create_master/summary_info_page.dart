@@ -14,8 +14,10 @@ import 'package:carbeat/constants/styles.dart';
 import 'package:carbeat/widgets/loading.dart';
 import 'package:latlong2/latlong.dart' as lat_lng;
 import 'package:provider/provider.dart';
+import 'package:image/image.dart' as img;
 
 import '../../providers/theme_provider.dart';
+import 'package:carbeat/utils/image_utils.dart';
 import '../../widgets/animated_text_field.dart';
 
 class SummaryInfoPage extends StatefulWidget {
@@ -42,6 +44,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   String? _placeId;
   bool isLoading = true;
   File? _photoFile;
+  File? _processedPhotoFile;
   Service? _service;
 
   @override
@@ -86,6 +89,14 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
     }
     if (_photoId != null) {
       await _getPhotoFromGallery(_photoId!);
+      if (_photoFile != null) {
+        final bytes = await _photoFile!.readAsBytes();
+        final processed = await processSquareUnderBytes(bytes);
+        final tempDir = Directory.systemTemp;
+        final outFile = await File('${tempDir.path}/carbeat_sq_${DateTime.now().millisecondsSinceEpoch}.jpg').create();
+        await outFile.writeAsBytes(processed, flush: true);
+        _processedPhotoFile = outFile;
+      }
     }
     if (_serviceId != null) {
       _service = await ServiceService.getServiceById(_serviceId!);
@@ -168,7 +179,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   Widget _buildContent() {
     return ListView(
       children: [
-        if (_photoFile != null) _buildPhotoTile(),
+        if (_processedPhotoFile != null || _photoFile != null) _buildPhotoTile(),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           child: AnimatedTextField(
@@ -218,7 +229,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
             '$title:',
             style: const TextStyle(
               fontSize: 16,
-              color: Styles.descriptionColor,
+              color: Styles.backgroundColor,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -237,6 +248,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   }
 
   Widget _buildPhotoTile() {
+    final File displayFile = _processedPhotoFile ?? _photoFile!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 0.0),
       child: Column(
@@ -266,19 +278,11 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
                 ),
               ],
             ),
-            child: _photoFile != null
-                ? ClipRRect(
+            child: ClipRRect(
                     borderRadius: BorderRadius.circular(Styles.borderRadius),
                     child: Image.file(
-                      _photoFile!,
-                      fit: BoxFit.contain,
-                    ),
-                  )
-                : const Center(
-                    child: Icon(
-                      Icons.image,
-                      size: 100,
-                      color: Styles.subtitleColor,
+                displayFile,
+                fit: BoxFit.cover,
                     ),
                   ),
           ),
@@ -288,7 +292,28 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   }
 
   void _registerUser() async {
-    final photo = _photoFile != null ? convertImageToBase64(_photoFile!) : null;
+    // Ensure processed image
+    if (_processedPhotoFile == null && _photoFile != null) {
+      final bytes = await _photoFile!.readAsBytes();
+      final processed = await processSquareUnderBytes(bytes);
+      final tempDir = Directory.systemTemp;
+      final outFile = await File('${tempDir.path}/carbeat_sq_${DateTime.now().millisecondsSinceEpoch}.jpg').create();
+      await outFile.writeAsBytes(processed, flush: true);
+      _processedPhotoFile = outFile;
+    }
+
+    final File? toSend = _processedPhotoFile ?? _photoFile;
+    String? photo;
+    if (toSend != null) {
+      final bytes = await toSend.readAsBytes();
+      photo = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    } else {
+      photo = null;
+    }
+
+    final int bytes = toSend != null ? await toSend.length() : 0;
+    final double sizeMb = bytes / (1024 * 1024);
+
     Map<String, dynamic> request = {
       'sms_code': _verificationCodeController.text,
       'phone': _phone,
@@ -323,6 +348,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
       }
     }
 
+    // Close modal flow by navigating to '/home-page' inside inner Navigator.
     Navigator.popAndPushNamed(
       // ignore: use_build_context_synchronously
       context,

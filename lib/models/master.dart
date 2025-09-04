@@ -10,7 +10,7 @@ class Master {
   final LatLng location;
   final String description;
   final double rating;
-  final String photo;
+  final String mainPhoto;
   final int specialityId;
   final int tariffId;
   List<Service> services;
@@ -24,7 +24,7 @@ class Master {
     required this.location,
     required this.description,
     required this.rating,
-    required this.photo,
+    required this.mainPhoto,
     required this.specialityId,
     required this.tariffId,
     this.services = const [],
@@ -46,7 +46,7 @@ class Master {
       address: json['address']??'',
       location: LatLng(lat, lng),
       description: json['description'],
-      photo: json['main_photo']??'',
+      mainPhoto: json['main_photo']??'',
       specialityId: json['main_service_id']??0,
       rating: double.parse((json['rating']??0).toString()),
       tariffId: json['tariff_id']??1,
@@ -69,7 +69,7 @@ class Master {
       'longitude': location.longitude,
       'description': description,
       'rating': rating,
-      'photo': photo,
+      'photo': mainPhoto,
       'speciality_id': specialityId,
       'tariff_id': tariffId,
       'services': services,

@@ -14,8 +14,8 @@ class AppConstants {
       "https://api.mapbox.com/styles/v1/rotting/$mapBoxStyleId/tiles/256/{z}/{x}/{y}@2x?access_token=$mapBoxAccessToken";
 
   //LOCAL_PHYSICAL_DEVICE
-  static const String serverUrl = 'http://10.214.4.75:100/api/';
-  static const String publicServerUrl = 'http://10.214.4.75:100/';
+  static const String serverUrl = 'http://10.24.19.75:100/api/';
+  static const String publicServerUrl = 'http://10.24.19.75:100/';
   //LOCAL_LINUX
   // static const String serverUrl = 'http://localhost:100/api/';
   // static const String publicServerUrl = 'http://localhost:100/';
