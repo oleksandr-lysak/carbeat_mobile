@@ -42,9 +42,9 @@ void main() async {
   await initializeDateFormatting();
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // await Firebase.initializeApp(
+  //   options: DefaultFirebaseOptions.currentPlatform,
+  // );
   final specialtyService = ServiceService();
   String? savedLanguage = await LanguageService.getLanguage();
   final tokenService = TokenService();

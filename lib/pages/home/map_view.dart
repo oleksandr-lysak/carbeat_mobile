@@ -223,7 +223,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
 
     try {
       Response response = await dio.get('$url&per_page=1000');
-      apiData = response.data;
+    apiData = response.data;
     } on DioException catch (_) {
       if (!mounted) return [];
       setState(() {
@@ -240,7 +240,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       return [];
     }
     
-    var tagObjsJson = apiData["masters"]["data"] as List;
+    var tagObjsJson = apiData["data"] as List;
     List<Master> tagObjs = await compute(parseMasters, tagObjsJson);
     mapWasLoaded = true;
     return tagObjs;
@@ -296,7 +296,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     setState(() {
       mapMasters.addAll(masters);
       if (page == 1) {
-        totalPages = masters.isNotEmpty ? apiData["masters"]["last_page"] : 1;
+        totalPages = masters.isNotEmpty ? apiData["meta"]["last_page"] : 1;
       }
 
       if (updateImmediately) {
@@ -390,14 +390,29 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
           ),
         ),
       );
+
       if (isActive) {
         selectedMarker = marker;
       } else {
-        masters.add(marker);
+      masters.add(marker);
       }
     }
     if (selectedMarker != null) {
       masters.add(selectedMarker!);
+    }
+  }
+
+  int _countMastersInViewport() {
+    if (!_controllerReady()) return masters.length;
+    try {
+      final bounds = mapController.camera.visibleBounds;
+      int count = 0;
+      for (final m in visibleMasters) {
+        if (bounds.contains(m.location)) count++;
+      }
+      return count;
+    } catch (_) {
+      return masters.length;
     }
   }
 
@@ -632,10 +647,23 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   // User location marker
                   if (currentLocation != null)
                     UserLocationMarker(location: currentLocation!),
-                  // Прості маркери без кластеризації
+                  // Маркери: кластеризація якщо в межах екрана > 100
+                  if (_countMastersInViewport() > 100)
+                    MarkerClusterLayerWidget(
+                      options: MarkerClusterLayerOptions(
+                        maxClusterRadius: 60,
+                        size: const Size(40, 40),
+                        markers: masters,
+                        builder: (context, clusterMarkers) {
+                          final gm = clusterMarkers.whereType<GarageMarker>().toList();
+                          return ClusterCircle(markers: gm);
+                        },
+                      ),
+                    )
+                  else
                   MarkerLayer(markers: masters),
                 ],
-              ),
+                ),
               Positioned(
                 right: 10,
                 top: MediaQuery.of(context).size.height * 0.05,
@@ -719,14 +747,14 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
               
               // Extra button allowing masters to toggle their availability.
               if (_isMaster)
-                Positioned(
+              Positioned(
                   right: 80,
                   top: MediaQuery.of(context).size.height * 0.05,
                   child: FloatingActionButton.extended(
                     heroTag: 'availability_fab',
                     onPressed: _toggleAvailability,
-                    backgroundColor: Styles().primaryColor,
-                    elevation: 10.0,
+                      backgroundColor: Styles().primaryColor,
+                      elevation: 10.0,
                     icon: Icon(
                       _isAvailable ? Icons.toggle_on : Icons.toggle_off,
                       color: _isAvailable ? Colors.greenAccent : Colors.grey,
@@ -791,18 +819,18 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                                               width: 40,
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                    ),
+                  ],
+                ),
+              ),
                                 ),
                               ],
                             );
                           },
                         )
                       : const SizedBox.shrink(),
+                  ),
                 ),
-              ),
             ],
           ),
         );

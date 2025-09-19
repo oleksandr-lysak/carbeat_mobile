@@ -51,19 +51,19 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDtJT61hN0MdQBYGeDPePYyyPX9Vr9f8pk',
-    appId: '1:876107507388:android:8764651ae8ea51960a92b9',
-    messagingSenderId: '876107507388',
-    projectId: 'app-carbeat-online',
-    storageBucket: 'app-carbeat-online.firebasestorage.app',
+    apiKey: 'AIzaSyC8YsY5x3StDZC6GfJqwfNpMHV-mtF1kTM',
+    appId: '1:856537368201:android:c221bcf193a91532fc6858',
+    messagingSenderId: '856537368201',
+    projectId: 'carbeat-online-717f6',
+    storageBucket: 'carbeat-online-717f6.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyD5Ihgk2fzEKJSVxQobnGpodRXSqrSRI2Y',
-    appId: '1:876107507388:ios:75d75d2b30f670e10a92b9',
-    messagingSenderId: '876107507388',
-    projectId: 'app-carbeat-online',
-    storageBucket: 'app-carbeat-online.firebasestorage.app',
+    apiKey: 'AIzaSyDdYvE-N6lmWOhd8PxrCkghPw5qbY86Lbo',
+    appId: '1:856537368201:ios:f575c2cc1969869bfc6858',
+    messagingSenderId: '856537368201',
+    projectId: 'carbeat-online-717f6',
+    storageBucket: 'carbeat-online-717f6.firebasestorage.app',
     iosBundleId: 'com.example.garagePlantMobile',
   );
 

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "876107507388",
-    "project_id": "app-carbeat-online",
-    "storage_bucket": "app-carbeat-online.firebasestorage.app"
+    "project_number": "856537368201",
+    "project_id": "carbeat-online-717f6",
+    "storage_bucket": "carbeat-online-717f6.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:876107507388:android:8764651ae8ea51960a92b9",
+        "mobilesdk_app_id": "1:856537368201:android:c221bcf193a91532fc6858",
         "android_client_info": {
           "package_name": "online.carbeat.app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDtJT61hN0MdQBYGeDPePYyyPX9Vr9f8pk"
+          "current_key": "AIzaSyC8YsY5x3StDZC6GfJqwfNpMHV-mtF1kTM"
         }
       ],
       "services": {
