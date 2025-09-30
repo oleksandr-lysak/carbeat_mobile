@@ -180,14 +180,46 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   }
 
   Future<void> _initLocationAndLoadData() async {
-    final location = await LocationService.getCurrentLocation();
-    setState(() {
-      currentLocation = location;
-    });
-    await _loadMapData(location);
+    try {
+      // Ensure we have permission first
+      if (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) {
+        final permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          await Geolocator.requestPermission();
+        }
+      }
 
-    // Initial filtering once data is loaded.
-    _updateVisibleMasters();
+      // Try to get location with timeout
+      LatLng? location;
+      try {
+        location = await LocationService.getCurrentLocation()
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {
+        location = null;
+      }
+
+      // Fallback to a safe default if location unavailable
+      location ??= LatLng(50.4501, 30.5234); // Kyiv center as sensible default
+
+      if (!mounted) return;
+      setState(() {
+        currentLocation = location;
+      });
+      await _loadMapData(location);
+
+      // Initial filtering once data is loaded.
+      _updateVisibleMasters();
+    } catch (_) {
+      // As last resort, show default map and allow user to proceed
+      if (!mounted) return;
+      final fallback = LatLng(50.4501, 30.5234);
+      setState(() {
+        currentLocation = currentLocation ?? fallback;
+        loading = false;
+      });
+      _updateVisibleMasters();
+    }
   }
 
   Future<List<Master>> getData(
