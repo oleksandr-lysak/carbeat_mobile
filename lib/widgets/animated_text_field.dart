@@ -42,23 +42,13 @@ class AnimatedTextFieldState extends State<AnimatedTextField> {
         padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 18.0),
         decoration: BoxDecoration(
           color: Styles().backgroundFormColor,
-          borderRadius: BorderRadius.circular(Styles.borderRadius),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: _isFocused
                 ? Styles().primaryColor
-                : Styles.subtitleColor,
-            width: 1.5,
-          ),
-          boxShadow: _isFocused
-              ? [
-                  BoxShadow(
-                    color: Styles().primaryColor.withOpacity(0.10),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
+                : Styles().primaryColor.withOpacity(0.3),
+            width: _isFocused ? 2 : 1,
                   ),
-                ]
-              : [],
         ),
         child: Row(
           children: [
@@ -69,34 +59,37 @@ class AnimatedTextFieldState extends State<AnimatedTextField> {
                 keyboardType: widget.keyboardType,
                 obscureText: widget.isPasswordField,
                 cursorColor: Styles().primaryColor,
-                //style: Theme.of(context).textTheme.titleMedium,
+                style: TextStyle(
+                  color: Styles().primaryColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
                 decoration: InputDecoration(
-                  
                   labelText: widget.labelText,
                   labelStyle: TextStyle(
-                    color: Styles().primaryColor,
-                    fontWeight: FontWeight.w400,
+                    color: Styles().primaryColor.withOpacity(0.5),
+                    fontSize: 16,
                   ),
                   hintText: widget.hintText,
+                  hintStyle: TextStyle(
+                    color: Styles().primaryColor.withOpacity(0.5),
+                    fontSize: 16,
+                  ),
                   focusedBorder: const OutlineInputBorder(
                     borderSide: BorderSide.none,
                   ),
                   enabledBorder: const OutlineInputBorder(
                     borderSide: BorderSide.none,
                   ),
-                  hintStyle: TextStyle(
-                    color: Colors.grey.shade800,
-                    fontWeight: FontWeight.w300,
-                  ),
                   border: InputBorder.none,
-                  
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 validator: widget.validator,
               ),
             ),
             if (widget.controller.text.isNotEmpty)
               IconButton(
-                icon: const Icon(Icons.clear, color: Styles.textInputColor),
+                icon: Icon(Icons.clear, color: Styles().primaryColor.withOpacity(0.5)),
                 onPressed: () {
                   widget.controller.clear();
                   setState(() {});

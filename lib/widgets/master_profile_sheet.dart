@@ -88,7 +88,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
         ? const Center(child: CircularProgressIndicator())
         : Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
+              color: Styles().primaryColor,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: EdgeInsets.only(
@@ -103,52 +103,192 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).hintColor,
+                        borderRadius: const BorderRadius.all(Radius.circular(8)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Профіль майстра',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Styles().titleColor,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: Icon(Icons.close, color: Styles().titleColor),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    const SizedBox(height: 20),
                     GestureDetector(
                       onTap: _pickAvatar,
                       child: CircleAvatar(
                         radius: 45,
-                        backgroundColor: Styles().primaryColor.withOpacity(.2),
+                        backgroundColor: Styles().backgroundFormColor,
                         backgroundImage: _avatarBase64 != null
                             ? MemoryImage(base64Decode(_avatarBase64!.split(',').last))
                             : null,
                         child: _avatarBase64 == null
-                            ? const Icon(Icons.camera_alt, size: 30)
+                            ? Icon(Icons.camera_alt, size: 30, color: Styles().primaryColor)
                             : null,
                       ),
                     ),
                     const SizedBox(height: 20),
-                    AnimatedTextField(
+                    TextField(
                       controller: _phoneCtrl,
-                      labelText: 'Phone',
                       keyboardType: TextInputType.phone,
-                      validator: (val) => !PhoneValidator.validate(val ?? '')
-                          ? 'Invalid phone'
-                          : null,
+                      style: TextStyle(
+                        color: Styles().primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Styles().backgroundFormColor,
+                        hintText: 'Телефон',
+                        hintStyle: TextStyle(
+                          color: Styles().primaryColor.withOpacity(0.5),
+                          fontSize: 16,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor.withOpacity(0.3),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor,
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
-                    AnimatedTextField(
+                    TextField(
                       controller: _descrCtrl,
                       maxLines: 3,
-                      labelText: 'Description',
+                      style: TextStyle(
+                        color: Styles().primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Styles().backgroundFormColor,
+                        hintText: 'Опис',
+                        hintStyle: TextStyle(
+                          color: Styles().primaryColor.withOpacity(0.5),
+                          fontSize: 16,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor.withOpacity(0.3),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor,
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
-                    AnimatedDropdownField(
-                      labelText: 'Main service',
-                      hintText: 'Select',
-                      items: serviceItems,
-                      selectedItem: _selectedService,
-                      onChanged: (val) => _selectedService = val,
-                      validator: (val) {
-                        if (val == null || val.id == 0) {
-                          return 'Please select a service';
-                        }
-                        return null;
-                      },
+                    DropdownButtonFormField<DropdownItem>(
+                      value: _selectedService,
+                      style: TextStyle(
+                        color: Styles().primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: Styles().primaryColor,
+                      ),
+                      dropdownColor: Styles().primaryColor,
+                      selectedItemBuilder: (context) => 
+                        serviceItems.map((item) => Text(
+                          item.name,
+                          style: TextStyle(
+                            color: Styles().primaryColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )).toList(),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Styles().backgroundFormColor,
+                        hintText: 'Основна послуга',
+                        hintStyle: TextStyle(
+                          color: Styles().primaryColor.withOpacity(0.5),
+                          fontSize: 16,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor.withOpacity(0.3),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor,
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
+                      items: serviceItems.map((item) => DropdownMenuItem<DropdownItem>(
+                        value: item,
+                        child: Text(
+                          item.name,
+                          style: TextStyle(
+                            color: Styles().titleColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )).toList(),
+                      onChanged: (val) => setState(() => _selectedService = val),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Styles().backgroundFormColor,
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
                       onPressed: _save,
-                      child: const Text('Save'),
+                      child: Text(
+                        'Зберегти',
+                        style: TextStyle(
+                          color: Styles().primaryColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -223,7 +363,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
     
     // Check for both 'error' and 'errors' fields
     if (res['error'] == null && res['errors'] == null) {
-      AppToast.show('Profile updated');
+      AppToast.show('Профіль оновлено', duration: Duration(seconds: 10), background: Colors.green);
       Navigator.pop(context);
       // Refresh local user data after successful update
       final api = ApiService(AppConstants.serverUrl);
@@ -240,12 +380,12 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       if (res['errors'] != null) {
         final errors = res['errors'] as Map<String, dynamic>;
         if (errors['service_id'] != null) {
-          errorMessage = 'Invalid service selected';
+          errorMessage = 'Неправильно вибрана послуга';
         } else if (errors.isNotEmpty) {
           errorMessage = errors.values.first.toString();
         }
       } else if (res['error'] != null) {
-        errorMessage = res['error'].toString();
+        errorMessage = res['message'].toString();
       }
       
       AppToast.show(errorMessage, background: Colors.red);

@@ -10,12 +10,29 @@
   "name": "Name",
   "description": "Description",
   "pick_photo": "Pick Photo",
+  "choose_photo": "Choose Photo",
   "submit": "Submit",
   "select_speciality": "Speciality",
   "booking_panel": "Booking Panel",
   "selected_date": "Selected Date",
   "booked_by": "Booked by",
   "available": "Available",
+  "input_details": "Input details",
+  "client_name": "Client name",
+  "duration": "Duration",
+  "next": "Next",
+  "sort_by": "Sort by:",
+  "cancel": "Cancel",
+  "apply": "Apply",
+  "filter": "Filter",
+  "enter_name": "Enter name",
+  "enter_description": "Enter description",
+  "choose_speciality": "Choose specialty",
+  "required": "Required",
+  "invalid_code": "Invalid code",
+  "invalid_phone": "Invalid phone number",
+  "verification_sms_code": "Verification SMS code",
+  "enter_verification_code": "Enter verification code",
   "summary_info_page": {
     "photo": "Photo",
     "address": "Address",
@@ -37,6 +54,9 @@
     "filter_rating": "Rating",
     "filter_available": "Available",
     "filter_service": "Service",
+    "sort_rating": "Rating",
+    "sort_distance": "Distance",
+    "sort_name": "Name",
     "master_dialog": {
       "title": "Create master or login?",
       "create": "Create",
@@ -45,7 +65,8 @@
       "phone": "Phone",
       "get_sms_code": "Get SMS code",
       "code": "Code",
-      "input_sms_code": "Input code"
+      "input_sms_code": "Input code",
+      "input_otp": "Input code"
     }
   },
   "system": {
@@ -55,13 +76,13 @@
     "logout": "Logout"
   },
   "booking": {
-    "name":"Name",
-    "phone":"Phone",
+    "name": "Name",
+    "phone": "Phone",
     "select_service": "Select service",
     "input_details": "Input details"
   },
   "data": {
-    "services":{
+    "services": {
       "hair_styling": "Hair styling",
       "hair_cutting": "Hair cutting",
       "hair_coloring": "Hair coloring",

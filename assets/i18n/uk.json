@@ -14,6 +14,7 @@
   "name": "Ім'я",
   "description": "Опис",
   "pick_photo": "Вибрати фото",
+  "choose_photo": "Вибрати фото",
   "submit": "Створити",
   "select_speciality": "Спеціальність",
   "booking_panel": "Панель бронювання",
@@ -23,6 +24,14 @@
   "input_details": "Введіть дані",
   "client_name": "Ім'я клієнта",
   "duration": "Тривалість",
+  "enter_name": "Введіть ім'я",
+  "enter_description": "Введіть опис",
+  "choose_speciality": "Оберіть спеціальність",
+  "required": "Обов'язково",
+  "invalid_code": "Неправильний код",
+  "invalid_phone": "Неправильний номер телефону",
+  "verification_sms_code": "Код з СМС",
+  "enter_verification_code": "Введіть код",
   "summary_info_page": {
     "photo": "Фото",
     "address": "Адреса",
@@ -56,14 +65,15 @@
       "phone": "Телефон",
       "get_sms_code": "Отримати СМС код",
       "code": "Код",
-      "input_sms_code": "Введіть код"
+      "input_sms_code": "Введіть код",
+      "input_otp": "Введіть код"
     }
   },
   "system": {
-    "filed_verify": "Код не верифіковано, будь лакса спробуйте ще раз."
+    "filed_verify": "Код не верифіковано, будь ласка, спробуйте ще раз."
   },
   "settings_view": {
-    "logout": "Logout"
+    "logout": "Вийти"
   },
   "booking": {
     "name": "Ім'я",

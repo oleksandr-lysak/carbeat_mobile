@@ -56,52 +56,46 @@ class AnimatedDropdownFieldState extends State<AnimatedDropdownField> {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 18.0),
         decoration: BoxDecoration(
-          color: Theme.of(context).hoverColor,
-          borderRadius: BorderRadius.circular(14.0),
+          color: Styles().backgroundFormColor,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: _isFocused
-                ? Theme.of(context).hoverColor
-                : Theme.of(context).hoverColor,
-            width: 1.5,
+                ? Styles().primaryColor
+                : Styles().primaryColor.withOpacity(0.3),
+            width: _isFocused ? 2 : 1,
           ),
-          boxShadow: _isFocused
-              ? [
-                  BoxShadow(
-                    color: Colors.blueAccent.withOpacity(0.15),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : [],
         ),
         child: DropdownButtonFormField<DropdownItem>(
           validator: widget.validator,
-          style: Theme.of(context).textTheme.titleMedium,
+          style: TextStyle(
+            color: Styles().primaryColor,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
           value: widget.selectedItem,
           decoration: InputDecoration(
             labelText: widget.labelText,
             labelStyle: TextStyle(
-              color: _isFocused
-                  ? Styles().primaryColor
-                  : Styles().primaryColor,
-              fontWeight: FontWeight.w400,
+              color: Styles().primaryColor.withOpacity(0.5),
+              fontSize: 16,
             ),
             hintText: widget.hintText,
             hintStyle: TextStyle(
-              color: Styles().primaryColor,
-              fontWeight: FontWeight.w300,
+              color: Styles().primaryColor.withOpacity(0.5),
+              fontSize: 16,
             ),
             focusedBorder: const OutlineInputBorder(
               borderSide: BorderSide.none,
             ),
+            enabledBorder: const OutlineInputBorder(
+              borderSide: BorderSide.none,
+            ),
             border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 16),
           ),
           icon: Icon(
             Icons.arrow_drop_down,
-            color: _isFocused
-                ? Styles().primaryColor
-                : Styles.descriptionColor,
+            color: Styles().primaryColor.withOpacity(0.5),
           ),
           items: widget.items
               .map((item) => DropdownMenuItem<DropdownItem>(
@@ -109,8 +103,9 @@ class AnimatedDropdownFieldState extends State<AnimatedDropdownField> {
                     child: Text(
                       item.name,
                       style: TextStyle(
-                        color: Styles.textInputColor,
-                        fontWeight: FontWeight.w400,
+                        color: Styles().primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ))

@@ -88,7 +88,7 @@ class _MapFilterDialogState extends State<MapFilterDialog> {
                       serviceId: selectedService?.id,
                       rating: selectedRating,
                       available: selectedAvailable,
-                      sort: selectedSort,
+                      sort: null,
                     );
                     Navigator.of(context).pop();
                   },
@@ -115,65 +115,20 @@ class _MapFilterDialogState extends State<MapFilterDialog> {
             ),
             // Chips for Services
             const SizedBox(height: 12),
-            Text(
-              FlutterI18n.translate(context, 'map_view.filter_service'),
-              style: theme.textTheme.titleMedium,
-            ),
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              children: widget.services.map((service) {
-                final isSelected = selectedService?.id == service.id;
-                return ChoiceChip(
-                  label: Text(service.name),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        selectedService = DropdownItem(id: service.id, name: service.name);
-                      } else {
-                        selectedService = null;
-                      }
-                    });
-                  },
-                  selectedColor: styles.primaryColor,
-                  backgroundColor: Colors.grey[200],
-                  labelStyle: TextStyle(
-                    color: isSelected ? styles.titleColor : Colors.black87,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                );
-              }).toList(),
+            AnimatedDropdownField(
+              labelText: FlutterI18n.translate(context, 'map_view.filter_service'),
+              items: widget.services
+                  .map((s) => DropdownItem(id: s.id, name: s.name))
+                  .toList(),
+              selectedItem: selectedService,
+              onChanged: (item) {
+                setState(() {
+                  selectedService = item;
+                });
+              },
             ),
 
-            const SizedBox(height: 24),
-            Text(FlutterI18n.translate(context, 'sort_by'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-
-            Wrap(
-              spacing: 10,
-              children: ['rating', 'name', 'distance'].map((sortOption) {
-                final isSelected = selectedSort == sortOption;
-                return ChoiceChip(
-                  label: Text(
-                    FlutterI18n.translate(context, 'map_view.sort_$sortOption'),
-                  ),
-                  selected: isSelected,
-                  onSelected: (_) {
-                    setState(() {
-                      selectedSort = sortOption;
-                    });
-                  },
-                  selectedColor: styles.primaryColor,
-                  backgroundColor: Colors.grey[200],
-                  labelStyle: TextStyle(
-                    color: isSelected ? styles.titleColor : Colors.black87,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                );
-              }).toList(),
-            )
-,
+            // Sorting removed
 
 
           ],

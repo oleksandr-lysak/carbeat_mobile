@@ -84,6 +84,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   bool _isMaster = false;
   String? _masterPhoto;
   bool _isAvailable = false;
+  bool _isUpdatingMasterStatus = false;
 
   // Cached zoom level so we can detect threshold crossings.
   double _currentZoom = 0;
@@ -91,6 +92,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   // Guard to suppress page change handling while we refresh/rebuild lists
   bool _isRefreshing = false;
   bool _softRefreshing = false;
+  bool _presentingModal = false;
 
   // Masters that should currently be shown on the map after applying zoom-based
   // filtering rules.
@@ -229,14 +231,14 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       setState(() {
         loading = false;
       });
-      AppToast.show('Сервер тимчасово недоступний. Спробуйте пізніше.', background: Colors.red);
+      AppToast.show('Сервер тимчасово недоступний. Спробуйте пізніше.', background: Colors.red, duration: Duration(seconds: 10));
       return [];
     } catch (_) {
       if (!mounted) return [];
       setState(() {
         loading = false;
       });
-      AppToast.show('Виникла помилка під час завантаження.', background: Colors.red);
+      AppToast.show('Виникла помилка під час завантаження.', background: Colors.red, duration: Duration(seconds: 10));
       return [];
     }
     
@@ -309,17 +311,16 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   void _createMarkers() {
     masters = [];
     final Set<int> seenMasterIds = {};
-    final double zoom = _controllerReady() ? mapController.camera.zoom : 12;
-    final bool zoomAllowsDetail = zoom > _markerDetailZoomThreshold;
+    // Always show detailed markers (with photos) for any markers that are not clustered.
+    // Clustering is controlled at the layer level; when markers are clustered, the cluster
+    // bubble is shown instead and individual markers are not rendered.
     GarageMarker? selectedMarker;
     for (int i = 0; i < visibleMasters.length; i++) {
       final master = visibleMasters[i];
       if (seenMasterIds.contains(master.id)) continue;
       seenMasterIds.add(master.id);
       final bool isActive = i == selectedIndex;
-      final double markerSize = (master.available || zoomAllowsDetail)
-          ? (isActive ? 52.0 : 40.0)
-          : (isActive ? 20.0 : 12.0);
+      final double markerSize = isActive ? 52.0 : 40.0;
       final marker = GarageMarker(
         key: ValueKey('marker_${master.id}'),
         height: markerSize,
@@ -341,52 +342,40 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                 child: child,
               ),
             ),
-            child: (master.available || zoomAllowsDetail)
-                ? Container(
-                    key: ValueKey('detailed_${master.id}_${master.available ? 1 : 0}'),
-                    child: AnimatedScale(
-                      scale: isActive ? 1.15 : 1.0,
-                      duration: const Duration(milliseconds: 500),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          if (isActive)
-                            Container(
-                              width: markerSize * 1.4,
-                              height: markerSize * 1.4,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.blueAccent.withOpacity(0.25),
-                              ),
-                            ),
-                          if (isActive)
-                            Container(
-                              width: markerSize * 1.05,
-                              height: markerSize * 1.05,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                            ),
-                          PulsatingMaster(
-                            master: master,
-                            isActive: isActive,
-                          ),
-                        ],
+            child: Container(
+              key: ValueKey('detailed_${master.id}_${master.available ? 1 : 0}'),
+              child: AnimatedScale(
+                scale: isActive ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 500),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (isActive)
+                      Container(
+                        width: markerSize * 1.4,
+                        height: markerSize * 1.4,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.blueAccent.withOpacity(0.25),
+                        ),
                       ),
-                    ),
-                  )
-                : Container(
-                    key: ValueKey('dot_${master.id}_${master.available ? 1 : 0}'),
-                    child: Center(
-                      child: _BouncingDot(
-                        size: markerSize,
-                        color: Colors.blue,
-                        isActive: isActive,
-                        bounce: false,
+                    if (isActive)
+                      Container(
+                        width: markerSize * 1.05,
+                        height: markerSize * 1.05,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
                       ),
+                    PulsatingMaster(
+                      master: master,
+                      isActive: isActive,
                     ),
-                  ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       );
@@ -450,6 +439,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   void _showList() {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Styles().primaryColor,
       shape: const RoundedRectangleBorder(
@@ -571,6 +561,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     );
     await showDialog(
       context: context,
+      useRootNavigator: true,
       barrierColor: Colors.black.withOpacity(0.35),
       builder: (context) {
         return MapFilterDialog(
@@ -614,9 +605,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     if (currentLocation == null) {
       return const Center(child: Loading());
     }
-    return loading
-        ? const Center(child: Loading())
-        : Scaffold(
+    return Scaffold(
           backgroundColor: Styles().titleColor,
           body: Stack(
             children: [
@@ -654,6 +643,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                         maxClusterRadius: 60,
                         size: const Size(40, 40),
                         markers: masters,
+                        showPolygon: false,
                         builder: (context, clusterMarkers) {
                           final gm = clusterMarkers.whereType<GarageMarker>().toList();
                           return ClusterCircle(markers: gm);
@@ -664,53 +654,72 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   MarkerLayer(markers: masters),
                 ],
                 ),
-              Positioned(
-                right: 10,
-                top: MediaQuery.of(context).size.height * 0.05,
-                child: FloatingActionButton(
-                  onPressed: () {
-                    if (_isMaster) {
-                      // Open the editable bottom-sheet with master profile details.
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => const MasterProfileSheet(),
-                      );
-                    } else {
-                      // Open the phone / OTP dialog. When the user is
-                      // successfully authorised as a master we update the UI
-                      // to reveal the availability button.
-                      showMasterDialog(
-                        context,
-                        onAuthorized: () {
-                          _updateMasterStatus();
-                        },
-                        onStartRegistration: (phone) {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.black.withOpacity(0.35),
-                            builder: (_) => MasterRegistrationFlowSheet(
-                              phone: phone,
-                              parentContext: context,
-                            ),
-                          ).then((_) {
-                            // After registration flow closes, refresh master status
-                            _updateMasterStatus();
-                          });
-                        },
-                      );
-                    }
-                    //Navigator.pushNamed(context, '/map-picker');
-                  },
-                  backgroundColor: _isMaster && _masterPhoto != null
-                      ? Colors.transparent
-                      : Styles().primaryColor,
-                  elevation: _isMaster && _masterPhoto != null ? 0.0 : 10.0,
-                  child: _buildMasterFabChild(),
-                ),
-              ),
+              // Positioned(
+              //   right: 10,
+              //   top: MediaQuery.of(context).size.height * 0.15,
+              //   child: FloatingActionButton(
+              //     heroTag: 'master_fab',
+              //     onPressed: () async {
+              //       if (_isUpdatingMasterStatus) return;
+                    
+              //       if (_isMaster) {
+              //         await showModalBottomSheet(
+              //           context: context,
+              //           useRootNavigator: true,
+              //           isScrollControlled: true,
+              //           backgroundColor: Colors.transparent,
+              //           builder: (_) => const MasterProfileSheet(),
+              //         ).then((_) {
+              //           if (mounted) {
+              //             _updateMasterStatus();
+              //           }
+              //         });
+              //       } else {
+              //         if (!mounted) return;
+              //         await showMasterDialog(
+              //           context,
+              //           onAuthorized: () async {
+              //             if (mounted) {
+              //               await _updateMasterStatus();
+              //             }
+              //           },
+              //           onStartRegistration: (phone) async {
+              //             if (!mounted) return;
+              //             await showModalBottomSheet(
+              //               context: context,
+              //               useRootNavigator: true,
+              //               isScrollControlled: true,
+              //               backgroundColor: Colors.transparent,
+              //               builder: (_) => MasterRegistrationFlowSheet(
+              //                 phone: phone,
+              //                 parentContext: context,
+              //               ),
+              //             ).then((_) async {
+              //               if (mounted) {
+              //                 await _updateMasterStatus();
+              //               }
+              //             });
+              //           },
+              //         );
+              //       }
+              //     },
+              //     backgroundColor: Styles().primaryColor,
+              //     elevation: 10.0,
+              //     child: !_isMaster 
+              //       ? Icon(Icons.add_location_alt_outlined, color: Styles().titleColor)
+              //       : _masterPhoto != null && _masterPhoto!.isNotEmpty
+              //         ? CircleAvatar(
+              //             backgroundColor: Colors.white,
+              //             backgroundImage: NetworkImage(_buildPhotoUrl(_masterPhoto!)),
+              //             onBackgroundImageError: (_, __) {},
+              //             child: null,
+              //           )
+              //         : CircleAvatar(
+              //             backgroundColor: Colors.white,
+              //             child: Icon(Icons.person, color: Colors.grey),
+              //           ),
+              //   ),
+              // ),
               // Positioned(
               //   right: 250,
               //   top: MediaQuery.of(context).size.height * 0.05,
@@ -724,48 +733,164 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
               // ),
               Positioned(
                 left: 10,
+                right: 10,
                 top: MediaQuery.of(context).size.height * 0.05,
-                //bottom: MediaQuery.of(context).size.height * 0.3 + 165,
-                child: FloatingActionButton(
-                  onPressed: _showList,
-                  backgroundColor: Styles().primaryColor,
-                  elevation: 10.0,
-                  child: Icon(Icons.list, color: Styles().titleColor),
-                ),
-              ),
-              Positioned(
-                left: 80,
-                top: MediaQuery.of(context).size.height * 0.05,
-                child: FloatingActionButton(
-                  heroTag: 'filter_fab',
-                  onPressed: _showFilterDialog,
-                  backgroundColor: Styles().primaryColor,
-                  elevation: 10.0,
-                  child: Icon(Icons.filter_alt, color: Styles().titleColor),
-                ),
-              ),
-              
-              // Extra button allowing masters to toggle their availability.
-              if (_isMaster)
-              Positioned(
-                  right: 80,
-                  top: MediaQuery.of(context).size.height * 0.05,
-                  child: FloatingActionButton.extended(
+                child: Builder(
+                  builder: (context) {
+                    final serviceProvider = Provider.of<ServiceProvider>(context);
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FloatingActionButton(
+                  heroTag: 'master_fab',
+                  onPressed: () async {
+                    if (_isMaster) {
+                      await showModalBottomSheet(
+                        context: context,
+                        useRootNavigator: true,
+                        isScrollControlled: true,
+                                  backgroundColor: Styles().primaryColor,
+                        builder: (_) => const MasterProfileSheet(),
+                      );
+                    } else {
+                      await showMasterDialog(
+                        context,
+                                  onAuthorized: _updateMasterStatus,
+                        onStartRegistration: (phone) {
+                          showModalBottomSheet(
+                            context: context,
+                            useRootNavigator: true,
+                            isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                            builder: (_) => MasterRegistrationFlowSheet(
+                              phone: phone,
+                              parentContext: context,
+                            ),
+                                    ).then((_) => _updateMasterStatus());
+                        },
+                      );
+                    }
+                            },
+                            backgroundColor: Styles().primaryColor,
+                            elevation: 10.0,
+                            child: !_isMaster 
+                              ? Icon(Icons.add_location_alt_outlined, color: Styles().titleColor)
+                              : Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Styles().primaryColor,
+                                  ),
+                                  child: _masterPhoto != null && _masterPhoto!.isNotEmpty
+                                    ? ClipOval(
+
+                                        child: Image.network(
+                                          _buildPhotoUrl(_masterPhoto!),
+                                          width: 56,
+                                          height: 56,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.blueGrey, size: 30),
+                                        ),
+                                      )
+                                    : const Icon(Icons.person, color: Colors.white, size: 30),
+                                ),
+                          ),
+                          const SizedBox(width: 8),
+                          FloatingActionButton.extended(
+                            heroTag: 'service_filter_fab',
+                            onPressed: () {},
+                            backgroundColor: Styles().primaryColor,
+                            elevation: 10.0,
+                            label: SizedBox(
+                              width: 200,
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<DropdownItem>(
+                                  isExpanded: true,
+                                  value: selectedService,
+                                  hint: Text('Послуга', style: TextStyle(color: Styles().titleColor)),
+                                  iconEnabledColor: Styles().titleColor,
+                                  dropdownColor: Styles().primaryColor,
+                                  items: [
+                                    DropdownMenuItem<DropdownItem>(
+                                      value: null,
+                                      child: Text(
+                                        'Всі послуги',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: Styles().titleColor, fontStyle: FontStyle.italic),
+                                      ),
+                                    ),
+                                    ...serviceProvider.services.map(
+                                      (s) => DropdownMenuItem<DropdownItem>(
+                                        value: DropdownItem(id: s.id, name: s.name),
+                                        child: Text(
+                                          s.name,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(color: Styles().titleColor),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (DropdownItem? item) async {
+                                    setState(() {
+                                      selectedService = item;
+                                      filterServiceId = item?.id;
+                                      mapMasters.clear();
+                                      masters.clear();
+                                      loading = true;
+                                      currentPage = 1;
+                                      _selectedMasterId = null;
+                                      selectedIndex = -1;
+                                    });
+                                    if (currentLocation != null) {
+                                      await _loadMapData(currentLocation!);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_isMaster) ...[
+                            const SizedBox(width: 8),
+                            FloatingActionButton(
                     heroTag: 'availability_fab',
                     onPressed: _toggleAvailability,
                       backgroundColor: Styles().primaryColor,
                       elevation: 10.0,
-                    icon: Icon(
-                      _isAvailable ? Icons.toggle_on : Icons.toggle_off,
-                      color: _isAvailable ? Colors.greenAccent : Colors.grey,
+                              child: Icon(
+                                _isAvailable 
+                                  ? Icons.timer_off_outlined
+                                  : Icons.timer_outlined,
+                                color: _isAvailable ? Colors.greenAccent : Styles().titleColor,
                       size: 28,
                     ),
-                    label: Text(
-                      _isAvailable ? 'Стати зайнятим' : 'Стати доступним',
-                      style: TextStyle(color: Styles().titleColor),
-                    ),
-                  ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
                 ),
+              ),
+              
+              // Extra button allowing masters to toggle their availability.
+              // if (_isMaster)
+              // Positioned(
+              //     right: 10,
+              //     top: MediaQuery.of(context).size.height * 0.15,
+              //     child: FloatingActionButton(
+              //       heroTag: 'availability_fab',
+              //       onPressed: _toggleAvailability,
+              //       backgroundColor: Styles().primaryColor,
+              //       elevation: 10.0,
+              //       child: Icon(
+              //         _isAvailable ? Icons.toggle_on : Icons.toggle_off,
+              //         color: _isAvailable ? Colors.greenAccent : Colors.grey,
+              //         size: 28,
+              //       ),
+              //     ),
+              //   ),
               Positioned.fill(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
@@ -829,6 +954,13 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                           },
                         )
                       : const SizedBox.shrink(),
+                  ),
+                ),
+              if (loading)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black54,
+                    child: const Center(child: Loading()),
                   ),
                 ),
             ],
@@ -925,6 +1057,9 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
 
   /// Re-evaluates whether the logged-in user is a master and updates the UI.
   Future<void> _updateMasterStatus() async {
+    if (_isUpdatingMasterStatus) return;
+    try {
+      _isUpdatingMasterStatus = true;
     final user = await UserService().getUser();
     if (!mounted) return;
     setState(() {
@@ -932,6 +1067,9 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       _masterPhoto = user?.master?.mainPhoto;
     });
     await _refreshOwnAvailabilityFromServer();
+    } finally {
+      _isUpdatingMasterStatus = false;
+    }
   }
 
   Future<void> _refreshOwnAvailabilityFromServer() async {
@@ -1001,6 +1139,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     final TextEditingController ctrl = TextEditingController(text: minutes.toString());
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Styles().primaryColor,
       shape: const RoundedRectangleBorder(
@@ -1030,7 +1169,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
               ),
               const SizedBox(height: 12),
               Text(
-                'Стати вільним',
+                'Стати вільним на:',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Styles().titleColor),
               ),
               const SizedBox(height: 12),
@@ -1042,9 +1181,37 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
                         filled: true,
-                        fillColor: Styles().titleColor,
-                        labelText: 'Тривалість (хв)',
+                        fillColor: Styles().backgroundFormColor,
+                        hintText: 'Хвилин',
+                        hintStyle: TextStyle(
+                          color: Styles().primaryColor.withOpacity(0.5),
+                          fontSize: 16,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor.withOpacity(0.3),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: Styles().primaryColor,
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        suffixIcon: Icon(
+                          Icons.timer_outlined,
+                          color: Styles().primaryColor,
+                        ),
                       ),
+                      style: TextStyle(
+                        color: Styles().primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      cursorColor: Styles().primaryColor,
                       onChanged: (val) {
                         final n = int.tryParse(val);
                         if (n != null && n > 0) minutes = n;
@@ -1055,19 +1222,31 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   Column(
                     children: [
                       ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Styles().backgroundFormColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
                         onPressed: () {
                           minutes += 30;
                           ctrl.text = minutes.toString();
                         },
-                        child: const Text('+30'),
+                        child: Text('+30 хв', style: TextStyle(color: Styles().primaryColor)),
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Styles().backgroundFormColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
                         onPressed: () {
                           minutes = (minutes - 30).clamp(30, 24 * 60);
                           ctrl.text = minutes.toString();
                         },
-                        child: const Text('-30'),
+                        child: Text('-30 хв', style: TextStyle(color: Styles().primaryColor)),
                       ),
                     ],
                   ),
@@ -1077,21 +1256,33 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Styles().backgroundFormColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text('Скасувати', style: TextStyle(color: Styles().titleColor)),
+                      child: Text('Скасувати', style: TextStyle(color: Styles().primaryColor)),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Styles().backgroundFormColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
                       onPressed: () async {
                         final n = int.tryParse(ctrl.text) ?? minutes;
                         final duration = n > 0 ? n : 60;
                         Navigator.pop(ctx);
                         await _setAvailability(duration);
                       },
-                      child: Text('Стати вільним', style: TextStyle(color: Styles().titleColor)),
+                      child: Text('Стати вільним', style: TextStyle(color: Styles().primaryColor)),
                     ),
                   ),
                 ],
@@ -1187,37 +1378,83 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     if (!_isMaster) {
       return Icon(Icons.add_location_alt_outlined, color: Styles().titleColor);
     }
-    if (_masterPhoto == null || _masterPhoto!.isEmpty) {
-      return Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: Styles().primaryColor, width: 3),
-          color: Colors.white,
-        ),
-        child: const Icon(Icons.person, color: Colors.grey, size: 30),
-      );
-    }
-
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Styles().primaryColor, width: 3),
-      ),
-      child: ClipOval(
+    
+    if (_masterPhoto != null && _masterPhoto!.isNotEmpty) {
+      return ClipOval(
         child: Image.network(
           _buildPhotoUrl(_masterPhoto!),
-          width: 56,
-          height: 56,
+        width: 56,
+        height: 56,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) {
-            return const Icon(Icons.person, color: Colors.grey, size: 30);
-          },
+          errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.grey, size: 30),
         ),
+      );
+    }
+    
+    return const Icon(Icons.person, color: Colors.grey, size: 30);
+  }
+
+  void _showMasterSheet() {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Styles().primaryColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+                    color: Theme.of(context).hintColor,
+                    borderRadius: const BorderRadius.all(Radius.circular(8)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Text(
+                        _isMaster ? 'Профіль майстра' : 'Стати майстром',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: Styles().titleColor
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Styles().titleColor),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: _isMaster 
+                    ? const MasterProfileSheet()
+                    : MasterRegistrationFlowSheet(
+                        phone: '',
+                        parentContext: context,
+                      ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -27,6 +27,7 @@ import 'classes/app_scroll_behavior.dart';
 import 'classes/app_themes.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:carbeat/navigation/route_observer.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() async {
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -75,7 +76,7 @@ void main() async {
             create: (context) => LanguageProvider(
                   savedLanguage != null
                       ? Locale(savedLanguage)
-                      : const Locale('en'),
+                      : WidgetsBinding.instance.window.platformDispatcher.locale,
                 ),),
         ChangeNotifierProvider(create: (_) => NotificationsProvider()),
       ],
@@ -87,28 +88,18 @@ void main() async {
 class MyApp extends StatefulWidget {
   final String? savedLanguage;
   final String? token;
-
   const MyApp({super.key, this.savedLanguage, this.token});
 
   static void restartApp(BuildContext context) {
-    final MyAppState state = context.findAncestorStateOfType<MyAppState>()!;
-    state.restartApp();
+    context.findAncestorStateOfType<_MyAppState>()?.restartApp();
   }
 
   @override
-  MyAppState createState() => MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
-class MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> {
   Key key = UniqueKey();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      FCMService.initializeFCM(context: context);
-    });
-  }
 
   void restartApp() {
     setState(() {
@@ -135,16 +126,19 @@ class MyAppState extends State<MyApp> {
           localizationsDelegates: [
             FlutterI18nDelegate(
               translationLoader: FileTranslationLoader(
-                // 'assets/' prefix is automatically added by FileTranslationLoader,
-                // so we specify only the relative folder name here to avoid
-                // the duplicated path ("assets/assets/i18n").
-                basePath: 'i18n',
+                // Point explicitly to the assets translations directory
+                basePath: 'assets/i18n',
                 fallbackFile: AppConstants.defaultLanguage,
                 forcedLocale: languageProvider.locale,
               ),
               missingTranslationHandler: (key, locale) {},
             ),
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
           ],
+          locale: languageProvider.locale,
+          supportedLocales: const [Locale('en'), Locale('de'), Locale('uk')],
           home: const MapView(),
           routes: {
             '/create-master': (context) => const MasterCreationPage(),

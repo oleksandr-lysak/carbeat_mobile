@@ -8,12 +8,13 @@ import '../../../services/user_service.dart';
 import '../../../models/user.dart';
 import '../../../utils/phone_validator.dart';
 
-void showMasterDialog(BuildContext context, {VoidCallback? onAuthorized, void Function(String phone)? onStartRegistration}) {
+Future<void> showMasterDialog(BuildContext context, {VoidCallback? onAuthorized, void Function(String phone)? onStartRegistration}) {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController phoneController = TextEditingController();
 
-  showDialog(
+  return showDialog(
     context: context,
+    useRootNavigator: true,
     builder: (BuildContext ctx) {
       return AlertDialog(
         title: Text(
@@ -66,10 +67,11 @@ void showMasterDialog(BuildContext context, {VoidCallback? onAuthorized, void Fu
   );
 }
 
-void _showOtpDialog(BuildContext context, String phone, bool needsRegistration, VoidCallback? onAuthorized, void Function(String phone)? onStartRegistration) {
+Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegistration, VoidCallback? onAuthorized, void Function(String phone)? onStartRegistration) {
   final TextEditingController codeController = TextEditingController();
-  showDialog(
+  return showDialog(
     context: context,
+    useRootNavigator: true,
     builder: (BuildContext ctx) {
       String? error;
       return StatefulBuilder(

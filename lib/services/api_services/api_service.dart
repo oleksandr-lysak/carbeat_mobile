@@ -53,6 +53,7 @@ class ApiService {
       } else {
         // refresh не спрацював — прибираємо токени, щоб викликати повторний логін
         await tokenService.deleteTokens();
+        await UserService().deleteUser();
         accessToken = null;
       }
     }
@@ -60,7 +61,6 @@ class ApiService {
     if (accessToken != null) {
       dio.options.headers['Authorization'] = 'Bearer $accessToken';
     } else {
-      await UserService().deleteUser();
       dio.options.headers.remove('Authorization');
     }
   }
@@ -93,10 +93,22 @@ class ApiService {
         final refreshed = await _refreshToken();
         if (refreshed) {
           await _ensureAuthorizedHeaders();
+          try {
           return await requestFn();
+          } catch (retryError) {
+            await TokenService().deleteTokens();
+            await UserService().deleteUser();
+            rethrow;
+          }
         } else {
-          // refresh не вдався — чистимо токени, щоб змусити користувача перелогінитись
+          // refresh не вдався — чистимо токени і дані користувача
           await TokenService().deleteTokens();
+          await UserService().deleteUser();
+          throw DioException(
+            requestOptions: e.requestOptions,
+            error: 'Session expired',
+            response: e.response,
+          );
         }
       }
       rethrow;
@@ -107,23 +119,35 @@ class ApiService {
   Future<bool> _refreshToken() async {
     final tokenService = TokenService();
     String? refreshToken = await tokenService.getRefreshToken();
-    if (refreshToken == null || refreshToken.isEmpty) return false;
+    if (refreshToken == null || refreshToken.isEmpty) {
+      await tokenService.deleteTokens();
+      await UserService().deleteUser();
+      return false;
+    }
+    
     try {
       final response = await dio.post('$apiUrl/auth/refresh', data: {
         'refresh_token': refreshToken,
       });
-      if (response.statusCode == 200) {
+      
+      if (response.statusCode == 200 && 
+          response.data['access_token'] != null && 
+          response.data['refresh_token'] != null) {
         await tokenService.saveTokens(
           response.data['access_token'],
           response.data['refresh_token'],
         );
         return true;
       }
+      
+      await tokenService.deleteTokens();
+      await UserService().deleteUser();
+      return false;
     } catch (_) {
-      // ignore
+      await tokenService.deleteTokens();
+      await UserService().deleteUser();
+      return false;
     }
-    await tokenService.deleteTokens();
-    return false;
   }
 
   /// GET запит
