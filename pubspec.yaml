@@ -76,7 +76,7 @@ dev_dependencies:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/icons/app/garage_go.png"
+  image_path: "assets/icons/app/carbeat.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -97,7 +97,7 @@ flutter:
     - assets/images/user_icon.png
     - assets/i18n/
     - assets/images/location-jump.gif
-    - assets/icons/app/garage_go.png
+    - assets/icons/app/carbeat.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -124,9 +124,3 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
-
-sentry:
-  upload_debug_symbols: true
-  upload_source_maps: true
-  project: garage_flutter
-  org: personal-p5o

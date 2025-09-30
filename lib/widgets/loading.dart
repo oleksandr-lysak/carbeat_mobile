@@ -51,7 +51,7 @@ class LoadingState extends State<Loading> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    String iconPath = 'assets/icons/app/garage_go.png';
+    String iconPath = 'assets/icons/app/carbeat.png';
 
     return AnimatedBuilder(
       animation: _controller,

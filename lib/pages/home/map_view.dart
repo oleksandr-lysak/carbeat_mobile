@@ -630,7 +630,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                     //urlTemplate: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
                     subdomains: const ['a', 'b', 'c', 'd'], // CartoCDN вимагає це
                     retinaMode: RetinaMode.isHighDensity(context),
-                    userAgentPackageName: 'com.it-pragmat.plant',
+                    userAgentPackageName: 'online.carbeat',
                     tileProvider: const FMTCStore('mapStore').getTileProvider(),
                   ),
                   // User location marker
