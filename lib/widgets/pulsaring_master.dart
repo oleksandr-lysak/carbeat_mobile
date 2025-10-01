@@ -27,39 +27,8 @@ class PulsatingIconState extends State<PulsatingMaster>
   void didUpdateWidget(PulsatingMaster oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.master.available != widget.master.available || oldWidget.master.tariffId != widget.master.tariffId) {
-      // Змінюємо анімацію при зміні статусу
-      _controller.stop();
-      bool shouldBounce = widget.master.tariffId != 2 && widget.master.available;
-
-      if (shouldBounce) {
-        const double endOffset = -10.0;
-        _bounceAnimation = Tween<double>(begin: 0.0, end: endOffset).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.bounceInOut),
-        );
-        _controller.repeat(reverse: true);
-      } else {
-        _bounceAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.linear),
-        );
-        _controller.reset();
-      }
-      setState(() {}); // Оновлюємо відображення
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Enable subtle bounce only for paid masters to add visual emphasis.
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 250),
-      vsync: this,
-    );
-
-    bool shouldBounce = widget.master.tariffId != 2 && widget.master.available;
-
+    final bool shouldBounce = widget.master.available;
+    _controller.stop();
     if (shouldBounce) {
       const double endOffset = -10.0;
       _bounceAnimation = Tween<double>(begin: 0.0, end: endOffset).animate(
@@ -67,7 +36,31 @@ class PulsatingIconState extends State<PulsatingMaster>
       );
       _controller.repeat(reverse: true);
     } else {
-      // No animation for free tariff.
+      _bounceAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.linear),
+      );
+      _controller.reset();
+    }
+    setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+
+    final bool shouldBounce = widget.master.available;
+    if (shouldBounce) {
+      const double endOffset = -10.0;
+      _bounceAnimation = Tween<double>(begin: 0.0, end: endOffset).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.bounceInOut),
+      );
+      _controller.repeat(reverse: true);
+    } else {
       _bounceAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(
         CurvedAnimation(parent: _controller, curve: Curves.linear),
       );
@@ -85,17 +78,26 @@ class PulsatingIconState extends State<PulsatingMaster>
     ThemeData currentTheme =
         Provider.of<ThemeProvider>(context, listen: true).themeData;
 
-    // Визначаємо шлях до іконки в залежності від теми
+    // Визначаємо шлях до іконки в залежності від теми (використовується лише як фолбек, не як плейсхолдер)
     String iconPath = currentTheme == AppThemes.darkTheme
         ? 'assets/icons/location.svg'
         : 'assets/icons/location.svg';
 
-    // Формуємо повний URL для фото
-    String photoUrl = widget.master.mainPhoto.isNotEmpty
-        ? '${AppConstants.publicServerUrl}${widget.master.mainPhoto}'
-        : '';
+    // Формуємо повний URL для фото (надійно з базовим URL)
+    String photoUrl = '';
+    if (widget.master.mainPhoto.isNotEmpty) {
+      final path = widget.master.mainPhoto;
+      if (path.startsWith('http')) {
+        photoUrl = path;
+      } else {
+        final base = AppConstants.publicServerUrl.endsWith('/')
+            ? AppConstants.publicServerUrl.substring(0, AppConstants.publicServerUrl.length - 1)
+            : AppConstants.publicServerUrl;
+        photoUrl = path.startsWith('/') ? '$base$path' : '$base/$path';
+      }
+    }
 
-    // Determine border styling according to tariff & availability.
+    // Стилі обвідки
     final bool isPaid = widget.master.tariffId == 2;
     final bool isAvailable = widget.master.available;
 
@@ -103,14 +105,14 @@ class PulsatingIconState extends State<PulsatingMaster>
     Color innerBorderColor = Colors.transparent;
 
     if (isPaid && isAvailable) {
-      outerBorderColor = Colors.green; // available outer
-      innerBorderColor = const Color(0xFFFFD700); // gold inner
+      outerBorderColor = Colors.green;
+      innerBorderColor = const Color(0xFFFFD700);
     } else if (isPaid) {
-      outerBorderColor = const Color(0xFFFFD700); // gold only
+      outerBorderColor = const Color(0xFFFFD700);
     } else if (isAvailable) {
-      outerBorderColor = const Color(0xFF00C853); // green
+      outerBorderColor = const Color(0xFF00C853);
     } else {
-      outerBorderColor = const Color(0xFFBDBDBD); // grey
+      outerBorderColor = const Color(0xFFBDBDBD);
     }
 
     return AnimatedBuilder(
@@ -132,14 +134,13 @@ class PulsatingIconState extends State<PulsatingMaster>
                       border: Border.all(color: innerBorderColor, width: 2),
                     ),
                     child: ClipOval(
-                      child: _buildPhotoOrIcon(photoUrl, iconPath),
+                      child: _buildPhotoOrFallback(photoUrl, iconPath),
                     ),
                   ),
                 )
-              : ClipOval(child: _buildPhotoOrIcon(photoUrl, iconPath)),
+              : ClipOval(child: _buildPhotoOrFallback(photoUrl, iconPath)),
         );
 
-        // Add "top" star label for paid masters.
         if (isPaid) {
           avatar = Stack(
             clipBehavior: Clip.none,
@@ -173,16 +174,25 @@ class PulsatingIconState extends State<PulsatingMaster>
     );
   }
 
-  Widget _buildPhotoOrIcon(String photoUrl, String iconPath) {
-    return photoUrl.isNotEmpty
-        ? CachedNetworkImage(
-            imageUrl: photoUrl,
-            fit: BoxFit.cover,
-          )
-        : SvgPicture.asset(
-            iconPath,
-            height: 100,
-            width: 100,
-          );
+  Widget _buildPhotoOrFallback(String photoUrl, String iconPath) {
+    if (photoUrl.isEmpty) {
+      // без плейсхолдера: прозорий контейнер
+      return const SizedBox.expand();
+    }
+    return CachedNetworkImage(
+      imageUrl: photoUrl,
+      fit: BoxFit.cover,
+      fadeInDuration: const Duration(milliseconds: 120),
+      // без плейсхолдера: прозоре, поки не завантажиться
+      placeholder: (context, url) => const SizedBox.expand(),
+      // на помилці показуємо іконку (не під час завантаження)
+      errorWidget: (context, url, error) => Center(
+        child: SvgPicture.asset(
+          iconPath,
+          height: 40,
+          width: 40,
+        ),
+      ),
+    );
   }
 }

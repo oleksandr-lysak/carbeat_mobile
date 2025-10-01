@@ -2,60 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:carbeat/classes/garage_marker.dart';
 import 'package:carbeat/constants/styles.dart';
 
-/// Circle icon for map clusters.
-///
-/// - Shows number of markers inside.
-/// - Pulsates when at least one available master present.
-/// - Adds gold star overlay when at least one premium (tariffId==2) master present.
-class ClusterCircle extends StatefulWidget {
+/// Circle icon for map clusters (stateless & lightweight).
+/// Shows number of markers inside and optional star overlay if any premium master exists.
+class ClusterCircle extends StatelessWidget {
   final List<GarageMarker> markers;
   const ClusterCircle({super.key, required this.markers});
 
   @override
-  State<ClusterCircle> createState() => _ClusterCircleState();
-}
-
-class _ClusterCircleState extends State<ClusterCircle>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    final hasAvailable = widget.markers.any((m) => m.master.available);
-
-    _controller = AnimationController(
-      duration: const Duration(seconds: 1),
-      vsync: this,
-    );
-
-    if (hasAvailable) {
-      _scale = Tween<double>(begin: 1.0, end: 1.2).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-      );
-      _controller.repeat(reverse: true);
-    } else {
-      _scale = AlwaysStoppedAnimation(1.0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final count = widget.markers.length;
-    //final hasPremium = widget.markers.any((m) => m.master.tariffId == 2);
+    final int count = markers.length;
+    final bool hasPremium = markers.any((m) => m.master.tariffId == 2);
 
-    // Determine colors
-    //final outerColor = widget.markers.any((m) => m.master.available) ? const Color(0xFF00C853) : const Color(0xFFBDBDBD);
-    //final innerColor = widget.markers.any((m) => m.master.tariffId == 2) ? const Color(0xFFFFD700) : outerColor;
-
-    final Color baseGreen = Styles().primaryColor; // main theme green
+    final Color baseGreen = Styles().primaryColor;
 
     double size;
     double fontSize;
@@ -87,7 +45,6 @@ class _ClusterCircleState extends State<ClusterCircle>
       alignment: Alignment.center,
       children: [
         base,
-        // Counter text overlay
         Center(
           child: Text(
             '$count',
@@ -102,7 +59,13 @@ class _ClusterCircleState extends State<ClusterCircle>
       ],
     );
 
-    if (widget.markers.any((m) => m.master.tariffId == 2)) {
+    if (hasPremium) {
+      base = Stack(
+        clipBehavior: Clip.none,
+        children: const [
+          // base will be inserted by parent Stack in build above
+        ],
+      );
       base = Stack(
         clipBehavior: Clip.none,
         children: [
@@ -116,6 +79,6 @@ class _ClusterCircleState extends State<ClusterCircle>
       );
     }
 
-    return Transform.scale(scale: _scale.value, child: base);
+    return base;
   }
 } 

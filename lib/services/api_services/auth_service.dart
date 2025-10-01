@@ -35,8 +35,9 @@ class AuthService {
 
     final accessToken = response['access_token'];
     final refreshToken = response['refresh_token'];
+    final expiresIn = response['expires_in'] is int ? response['expires_in'] as int : null;
     final tokenService = TokenService();
-    await tokenService.saveTokens(accessToken, refreshToken);
+    await tokenService.saveTokens(accessToken, refreshToken, expiresInSeconds: expiresIn);
 
     // Fetch full user from auth/me to ensure latest fields like master.main_photo
     final me = await apiService.getRequest('auth/me');
@@ -125,5 +126,31 @@ class AuthService {
     };
     User user = User.fromJson(data);
     await userService.saveUserData(user);
+  }
+
+  // Check auth status on app start
+  Future<bool> checkAuthStatus() async {
+    final tokenService = TokenService();
+    final accessToken = await tokenService.getAccessToken();
+    if (accessToken == null) return false;
+
+    if (!await tokenService.isTokenValid()) {
+      return await apiService.refreshToken();
+    }
+    return true;
+  }
+
+  // Explicit refresh helper (avoid using postRequest to prevent recursion)
+  Future<bool> refreshToken() async {
+    return apiService.refreshToken();
+  }
+
+  // Logout (server-side). Do not auto-delete local tokens here to respect persistent login requirement.
+  Future<void> logout() async {
+    final refresh = await TokenService().getRefreshToken();
+    if (refresh == null || refresh.isEmpty) return;
+    await apiService.postRequest('auth/logout', {
+      'refresh_token': refresh,
+    });
   }
 }

@@ -33,16 +33,19 @@ import 'package:carbeat/navigation/route_observer.dart';
 import 'package:carbeat/widgets/master_registration_flow_sheet.dart';
 import 'package:carbeat/services/api_services/api_service.dart';
 import 'package:carbeat/widgets/app_toast.dart';
- 
- 
- class MapView extends StatefulWidget {
+import 'package:carbeat/widgets/master_details_sheet.dart';
+import 'package:carbeat/widgets/master_expandable_sheet.dart';
+import 'package:carbeat/providers/notification_provider.dart';
+
+class MapView extends StatefulWidget {
   const MapView({super.key});
 
   @override
   MapViewState createState() => MapViewState();
 }
 
-class MapViewState extends State<MapView> with TickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
+class MapViewState extends State<MapView>
+    with TickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
   final pageController = PageController();
   static final MapController mapController = MapController();
   final DraggableScrollableController sheetController =
@@ -72,6 +75,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   Timer? _refreshTimer;
   static const Duration refreshInterval = Duration(seconds: 15);
 
+  // Debounce for map events
+  Timer? _mapEventDebounce;
+  static const Duration mapEventDebounceDuration = Duration(milliseconds: 120);
+
   // This flag is used to distinguish between PageView scrolls that are
   // triggered programmatically after tapping on a marker (animateToPage)
   // and scrolls that are initiated manually by the user. While the page is
@@ -94,16 +101,22 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   bool _softRefreshing = false;
   bool _presentingModal = false;
 
+  // Cache to reuse lightweight marker widgets
+  final Map<int, Widget> _lightMarkerCache = {};
+  // Notifications tracking
+  VoidCallback? _notificationsListener;
+  int _lastNotificationCount = 0;
+
   // Masters that should currently be shown on the map after applying zoom-based
   // filtering rules.
   List<Master> visibleMasters = [];
-  
+
   int? _selectedMasterId;
-  
+
   late final StreamSubscription _mapSub;
   bool _isRouteVisible = false;
   bool _isRouteSubscribed = false;
-  
+
   // Threshold: show detailed markers above this zoom, blue dots otherwise
   static const double _markerDetailZoomThreshold = 15.0;
 
@@ -126,7 +139,23 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
 
     // Listen for map movements/zoom changes to update visible masters.
     _mapSub = MapViewState.mapController.mapEventStream.listen((event) {
-      _updateVisibleMasters();
+      _mapEventDebounce?.cancel();
+      _mapEventDebounce = Timer(mapEventDebounceDuration, () {
+        if (mounted) _updateVisibleMasters();
+      });
+    });
+
+    // Subscribe to push notifications to instantly reflect availability changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final notifications = Provider.of<NotificationsProvider>(context, listen: false);
+      _notificationsListener = () {
+        final list = notifications.notifications;
+        for (int i = _lastNotificationCount; i < list.length; i++) {
+          _handleNotification(list[i]);
+        }
+        _lastNotificationCount = list.length;
+      };
+      notifications.addListener(_notificationsListener!);
     });
   }
 
@@ -193,8 +222,9 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       // Try to get location with timeout
       LatLng? location;
       try {
-        location = await LocationService.getCurrentLocation()
-            .timeout(const Duration(seconds: 5));
+        location = await LocationService.getCurrentLocation().timeout(
+          const Duration(seconds: 5),
+        );
       } catch (_) {
         location = null;
       }
@@ -257,23 +287,31 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
 
     try {
       Response response = await dio.get('$url&per_page=1000');
-    apiData = response.data;
+      apiData = response.data;
     } on DioException catch (_) {
       if (!mounted) return [];
       setState(() {
         loading = false;
       });
-      AppToast.show('Сервер тимчасово недоступний. Спробуйте пізніше.', background: Colors.red, duration: Duration(seconds: 10));
+      AppToast.show(
+        'Сервер тимчасово недоступний. Спробуйте пізніше.',
+        background: Colors.red,
+        duration: Duration(seconds: 10),
+      );
       return [];
     } catch (_) {
       if (!mounted) return [];
       setState(() {
         loading = false;
       });
-      AppToast.show('Виникла помилка під час завантаження.', background: Colors.red, duration: Duration(seconds: 10));
+      AppToast.show(
+        'Виникла помилка під час завантаження.',
+        background: Colors.red,
+        duration: Duration(seconds: 10),
+      );
       return [];
     }
-    
+
     var tagObjsJson = apiData["data"] as List;
     List<Master> tagObjs = await compute(parseMasters, tagObjsJson);
     mapWasLoaded = true;
@@ -343,9 +381,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
   void _createMarkers() {
     masters = [];
     final Set<int> seenMasterIds = {};
-    // Always show detailed markers (with photos) for any markers that are not clustered.
-    // Clustering is controlled at the layer level; when markers are clustered, the cluster
-    // bubble is shown instead and individual markers are not rendered.
+
     GarageMarker? selectedMarker;
     for (int i = 0; i < visibleMasters.length; i++) {
       final master = visibleMasters[i];
@@ -353,6 +389,32 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       seenMasterIds.add(master.id);
       final bool isActive = i == selectedIndex;
       final double markerSize = isActive ? 52.0 : 40.0;
+
+      final Widget child = Stack(
+        alignment: Alignment.center,
+        children: [
+          if (isActive)
+            Container(
+              width: markerSize * 1.4,
+              height: markerSize * 1.4,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.blueAccent.withOpacity(0.25),
+              ),
+            ),
+          if (isActive)
+            Container(
+              width: markerSize * 1.05,
+              height: markerSize * 1.05,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+            ),
+          PulsatingMaster(master: master, isActive: isActive),
+        ],
+      );
+
       final marker = GarageMarker(
         key: ValueKey('marker_${master.id}'),
         height: markerSize,
@@ -363,59 +425,14 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
           onTap: () {
             _onMarkerTap(i);
           },
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.9, end: 1.0).animate(animation),
-                child: child,
-              ),
-            ),
-            child: Container(
-              key: ValueKey('detailed_${master.id}_${master.available ? 1 : 0}'),
-              child: AnimatedScale(
-                scale: isActive ? 1.15 : 1.0,
-                duration: const Duration(milliseconds: 500),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (isActive)
-                      Container(
-                        width: markerSize * 1.4,
-                        height: markerSize * 1.4,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.blueAccent.withOpacity(0.25),
-                        ),
-                      ),
-                    if (isActive)
-                      Container(
-                        width: markerSize * 1.05,
-                        height: markerSize * 1.05,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                      ),
-                    PulsatingMaster(
-                      master: master,
-                      isActive: isActive,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          child: child,
         ),
       );
 
       if (isActive) {
         selectedMarker = marker;
       } else {
-      masters.add(marker);
+        masters.add(marker);
       }
     }
     if (selectedMarker != null) {
@@ -446,8 +463,12 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       _selectedMasterId = visibleMasters[index].id;
       _createMarkers();
     });
+
+    // Prefetch full master data
+    final int masterId = visibleMasters[index].id;
+    ApiService(AppConstants.serverUrl).getRequest('masters/$masterId');
   }
-  
+
   void _clearSelection() {
     if (_selectedMasterId != null || selectedIndex != -1) {
       setState(() {
@@ -481,12 +502,18 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
         final mastersToShow = List<Master>.from(visibleMasters);
         // Compute distance (km) from current location and sort: available first, then by distance asc
         final Distance distanceCalc = Distance();
-        final List<Map<String, dynamic>> items = mastersToShow.map((m) {
-          final double km = (currentLocation != null)
-              ? distanceCalc.as(LengthUnit.Kilometer, currentLocation!, m.location)
-              : double.infinity;
-          return {'master': m, 'km': km, 'available': m.available};
-        }).toList();
+        final List<Map<String, dynamic>> items =
+            mastersToShow.map((m) {
+              final double km =
+                  (currentLocation != null)
+                      ? distanceCalc.as(
+                        LengthUnit.Kilometer,
+                        currentLocation!,
+                        m.location,
+                      )
+                      : double.infinity;
+              return {'master': m, 'km': km, 'available': m.available};
+            }).toList();
         items.sort((a, b) {
           final bool aAvail = a['available'] as bool;
           final bool bAvail = b['available'] as bool;
@@ -511,13 +538,19 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
                   child: Row(
                     children: [
                       Text(
                         'Masters (${items.length})',
-                        style:  TextStyle(fontSize: 20, fontWeight: FontWeight.w600, 
-                        color: Styles().titleColor),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: Styles().titleColor,
+                        ),
                       ),
                       const Spacer(),
                       IconButton(
@@ -538,25 +571,37 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: Colors.grey.shade200,
-                          foregroundImage: (m.mainPhoto.isNotEmpty)
-                              ? NetworkImage(_buildPhotoUrl(m.mainPhoto))
-                              : null,
+                          foregroundImage:
+                              (m.mainPhoto.isNotEmpty)
+                                  ? NetworkImage(_buildPhotoUrl(m.mainPhoto))
+                                  : null,
                           child: const Icon(Icons.person, color: Colors.grey),
                         ),
-                        title: Text(m.name, style: TextStyle(color: Styles().titleColor)),
+                        title: Text(
+                          m.name,
+                          style: TextStyle(color: Styles().titleColor),
+                        ),
                         subtitle: Row(
                           children: [
                             if (m.available)
-                               Padding(
+                              Padding(
                                 padding: EdgeInsets.only(right: 8.0),
-                                child: Icon(Icons.circle, color: Styles().checkColor, size: 10),
+                                child: Icon(
+                                  Icons.circle,
+                                  color: Styles().checkColor,
+                                  size: 10,
+                                ),
                               ),
                             Flexible(
-                              child: 
-                              Text('~${km.isFinite ? km.toStringAsFixed(2) : '--'} km', 
-                              maxLines: 1, overflow: TextOverflow.ellipsis, 
-                              style: TextStyle(color: Styles().backgroundFormColor))
+                              child: Text(
+                                '~${km.isFinite ? km.toStringAsFixed(2) : '--'} km',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Styles().backgroundFormColor,
+                                ),
                               ),
+                            ),
                             const SizedBox(width: 8),
                             Text('${m.rating.toStringAsFixed(1)}★'),
                           ],
@@ -564,7 +609,9 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.pop(context);
-                          final idx = visibleMasters.indexWhere((vm) => vm.id == m.id);
+                          final idx = visibleMasters.indexWhere(
+                            (vm) => vm.id == m.id,
+                          );
                           if (idx != -1) {
                             _onMarkerTap(idx);
                             AnimationService.animatedMapMove(
@@ -586,6 +633,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       },
     );
   }
+
   void _showFilterDialog() async {
     final serviceProvider = Provider.of<ServiceProvider>(
       context,
@@ -638,366 +686,360 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       return const Center(child: Loading());
     }
     return Scaffold(
-          backgroundColor: Styles().titleColor,
-          body: Stack(
+      backgroundColor: Styles().titleColor,
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: mapController,
+            options: MapOptions(
+              minZoom: 2,
+              maxZoom: 18,
+              initialZoom: 11,
+              initialCenter: currentLocation!,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
+              onTap: (tapPosition, point) {
+                _clearSelection();
+              },
+            ),
             children: [
-              FlutterMap(
-                mapController: mapController,
-                options: MapOptions(
-                  minZoom: 2,
-                  maxZoom: 18,
-                  initialZoom: 11,
-                  initialCenter: currentLocation!,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              TileLayer(
+                urlTemplate:
+                    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                //urlTemplate: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c', 'd'], // CartoCDN вимагає це
+                retinaMode: RetinaMode.isHighDensity(context),
+                userAgentPackageName: 'online.carbeat',
+                tileProvider: const FMTCStore('mapStore').getTileProvider(),
+              ),
+              // User location marker
+              if (currentLocation != null)
+                UserLocationMarker(location: currentLocation!),
+              // Маркери: кластеризація якщо в межах екрана > 100
+              if (_countMastersInViewport() > 100)
+                MarkerClusterLayerWidget(
+                  options: MarkerClusterLayerOptions(
+                    maxClusterRadius: 60,
+                    size: const Size(40, 40),
+                    markers: masters,
+                    showPolygon: false,
+                    builder: (context, clusterMarkers) {
+                      final gm =
+                          clusterMarkers.whereType<GarageMarker>().toList();
+                      return ClusterCircle(markers: gm);
+                    },
                   ),
-                  onTap: (tapPosition, point) {
-                    _clearSelection();
-                  },
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                    //urlTemplate: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c', 'd'], // CartoCDN вимагає це
-                    retinaMode: RetinaMode.isHighDensity(context),
-                    userAgentPackageName: 'online.carbeat',
-                    tileProvider: const FMTCStore('mapStore').getTileProvider(),
-                  ),
-                  // User location marker
-                  if (currentLocation != null)
-                    UserLocationMarker(location: currentLocation!),
-                  // Маркери: кластеризація якщо в межах екрана > 100
-                  if (_countMastersInViewport() > 100)
-                    MarkerClusterLayerWidget(
-                      options: MarkerClusterLayerOptions(
-                        maxClusterRadius: 60,
-                        size: const Size(40, 40),
-                        markers: masters,
-                        showPolygon: false,
-                        builder: (context, clusterMarkers) {
-                          final gm = clusterMarkers.whereType<GarageMarker>().toList();
-                          return ClusterCircle(markers: gm);
+                )
+              else
+                MarkerLayer(markers: masters),
+            ],
+          ),
+          // Positioned(
+          //   right: 10,
+          //   top: MediaQuery.of(context).size.height * 0.15,
+          //   child: FloatingActionButton(
+          //     heroTag: 'master_fab',
+          //     onPressed: () async {
+          //       if (_isUpdatingMasterStatus) return;
+
+          //       if (_isMaster) {
+          //         await showModalBottomSheet(
+          //           context: context,
+          //           useRootNavigator: true,
+          //           isScrollControlled: true,
+          //           backgroundColor: Colors.transparent,
+          //           builder: (_) => const MasterProfileSheet(),
+          //         ).then((_) {
+          //           if (mounted) {
+          //             _updateMasterStatus();
+          //           }
+          //         });
+          //       } else {
+          //         if (!mounted) return;
+          //         await showMasterDialog(
+          //           context,
+          //           onAuthorized: () async {
+          //             if (mounted) {
+          //               await _updateMasterStatus();
+          //             }
+          //           },
+          //           onStartRegistration: (phone) async {
+          //             if (!mounted) return;
+          //             await showModalBottomSheet(
+          //               context: context,
+          //               useRootNavigator: true,
+          //               isScrollControlled: true,
+          //               backgroundColor: Colors.transparent,
+          //               builder: (_) => MasterRegistrationFlowSheet(
+          //                 phone: phone,
+          //                 parentContext: context,
+          //               ),
+          //             ).then((_) async {
+          //               if (mounted) {
+          //                 await _updateMasterStatus();
+          //               }
+          //             });
+          //           },
+          //         );
+          //       }
+          //     },
+          //     backgroundColor: Styles().primaryColor,
+          //     elevation: 10.0,
+          //     child: !_isMaster
+          //       ? Icon(Icons.add_location_alt_outlined, color: Styles().titleColor)
+          //       : _masterPhoto != null && _masterPhoto!.isNotEmpty
+          //         ? CircleAvatar(
+          //             backgroundColor: Colors.white,
+          //             backgroundImage: NetworkImage(_buildPhotoUrl(_masterPhoto!)),
+          //             onBackgroundImageError: (_, __) {},
+          //             child: null,
+          //           )
+          //         : CircleAvatar(
+          //             backgroundColor: Colors.white,
+          //             child: Icon(Icons.person, color: Colors.grey),
+          //           ),
+          //   ),
+          // ),
+          // Positioned(
+          //   right: 250,
+          //   top: MediaQuery.of(context).size.height * 0.05,
+          //   //bottom: MediaQuery.of(context).size.height * 0.3 + 165,
+          //   child: FloatingActionButton(
+          //     onPressed: _moveToCurrentLocation,
+          //     backgroundColor: Styles().primaryColor,
+          //     elevation: 10.0,
+          //     child: Icon(Icons.my_location, color: Styles().titleColor),
+          //   ),
+          // ),
+          Positioned(
+            left: 10,
+            right: 10,
+            top: MediaQuery.of(context).size.height * 0.05,
+            child: Builder(
+              builder: (context) {
+                final serviceProvider = Provider.of<ServiceProvider>(context);
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      FloatingActionButton(
+                        heroTag: 'master_fab',
+                        onPressed: () async {
+                          if (_isMaster) {
+                            await showModalBottomSheet(
+                              context: context,
+                              useRootNavigator: true,
+                              isScrollControlled: true,
+                              backgroundColor: Styles().primaryColor,
+                              builder: (_) => const MasterProfileSheet(),
+                            );
+                          } else {
+                            await showMasterDialog(
+                              context,
+                              onAuthorized: _updateMasterStatus,
+                              onStartRegistration: (phone) {
+                                showModalBottomSheet(
+                                  context: context,
+                                  useRootNavigator: true,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder:
+                                      (_) => MasterRegistrationFlowSheet(
+                                        phone: phone,
+                                        parentContext: context,
+                                      ),
+                                ).then((_) => _updateMasterStatus());
+                              },
+                            );
+                          }
                         },
-                      ),
-                    )
-                  else
-                  MarkerLayer(markers: masters),
-                ],
-                ),
-              // Positioned(
-              //   right: 10,
-              //   top: MediaQuery.of(context).size.height * 0.15,
-              //   child: FloatingActionButton(
-              //     heroTag: 'master_fab',
-              //     onPressed: () async {
-              //       if (_isUpdatingMasterStatus) return;
-                    
-              //       if (_isMaster) {
-              //         await showModalBottomSheet(
-              //           context: context,
-              //           useRootNavigator: true,
-              //           isScrollControlled: true,
-              //           backgroundColor: Colors.transparent,
-              //           builder: (_) => const MasterProfileSheet(),
-              //         ).then((_) {
-              //           if (mounted) {
-              //             _updateMasterStatus();
-              //           }
-              //         });
-              //       } else {
-              //         if (!mounted) return;
-              //         await showMasterDialog(
-              //           context,
-              //           onAuthorized: () async {
-              //             if (mounted) {
-              //               await _updateMasterStatus();
-              //             }
-              //           },
-              //           onStartRegistration: (phone) async {
-              //             if (!mounted) return;
-              //             await showModalBottomSheet(
-              //               context: context,
-              //               useRootNavigator: true,
-              //               isScrollControlled: true,
-              //               backgroundColor: Colors.transparent,
-              //               builder: (_) => MasterRegistrationFlowSheet(
-              //                 phone: phone,
-              //                 parentContext: context,
-              //               ),
-              //             ).then((_) async {
-              //               if (mounted) {
-              //                 await _updateMasterStatus();
-              //               }
-              //             });
-              //           },
-              //         );
-              //       }
-              //     },
-              //     backgroundColor: Styles().primaryColor,
-              //     elevation: 10.0,
-              //     child: !_isMaster 
-              //       ? Icon(Icons.add_location_alt_outlined, color: Styles().titleColor)
-              //       : _masterPhoto != null && _masterPhoto!.isNotEmpty
-              //         ? CircleAvatar(
-              //             backgroundColor: Colors.white,
-              //             backgroundImage: NetworkImage(_buildPhotoUrl(_masterPhoto!)),
-              //             onBackgroundImageError: (_, __) {},
-              //             child: null,
-              //           )
-              //         : CircleAvatar(
-              //             backgroundColor: Colors.white,
-              //             child: Icon(Icons.person, color: Colors.grey),
-              //           ),
-              //   ),
-              // ),
-              // Positioned(
-              //   right: 250,
-              //   top: MediaQuery.of(context).size.height * 0.05,
-              //   //bottom: MediaQuery.of(context).size.height * 0.3 + 165,
-              //   child: FloatingActionButton(
-              //     onPressed: _moveToCurrentLocation,
-              //     backgroundColor: Styles().primaryColor,
-              //     elevation: 10.0,
-              //     child: Icon(Icons.my_location, color: Styles().titleColor),
-              //   ),
-              // ),
-              Positioned(
-                left: 10,
-                right: 10,
-                top: MediaQuery.of(context).size.height * 0.05,
-                child: Builder(
-                  builder: (context) {
-                    final serviceProvider = Provider.of<ServiceProvider>(context);
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          FloatingActionButton(
-                  heroTag: 'master_fab',
-                  onPressed: () async {
-                    if (_isMaster) {
-                      await showModalBottomSheet(
-                        context: context,
-                        useRootNavigator: true,
-                        isScrollControlled: true,
-                                  backgroundColor: Styles().primaryColor,
-                        builder: (_) => const MasterProfileSheet(),
-                      );
-                    } else {
-                      await showMasterDialog(
-                        context,
-                                  onAuthorized: _updateMasterStatus,
-                        onStartRegistration: (phone) {
-                          showModalBottomSheet(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                            builder: (_) => MasterRegistrationFlowSheet(
-                              phone: phone,
-                              parentContext: context,
-                            ),
-                                    ).then((_) => _updateMasterStatus());
-                        },
-                      );
-                    }
-                            },
-                            backgroundColor: Styles().primaryColor,
-                            elevation: 10.0,
-                            child: !_isMaster 
-                              ? Icon(Icons.add_location_alt_outlined, color: Styles().titleColor)
-                              : Container(
+                        backgroundColor: Styles().primaryColor,
+                        elevation: 10.0,
+                        child:
+                            !_isMaster
+                                ? Icon(
+                                  Icons.add_location_alt_outlined,
+                                  color: Styles().titleColor,
+                                )
+                                : Container(
                                   width: 56,
                                   height: 56,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: Styles().primaryColor,
                                   ),
-                                  child: _masterPhoto != null && _masterPhoto!.isNotEmpty
-                                    ? ClipOval(
-
-                                        child: Image.network(
-                                          _buildPhotoUrl(_masterPhoto!),
-                                          width: 56,
-                                          height: 56,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.blueGrey, size: 30),
-                                        ),
-                                      )
-                                    : const Icon(Icons.person, color: Colors.white, size: 30),
-                                ),
-                          ),
-                          const SizedBox(width: 8),
-                          FloatingActionButton.extended(
-                            heroTag: 'service_filter_fab',
-                            onPressed: () {},
-                            backgroundColor: Styles().primaryColor,
-                            elevation: 10.0,
-                            label: SizedBox(
-                              width: 200,
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<DropdownItem>(
-                                  isExpanded: true,
-                                  value: selectedService,
-                                  hint: Text('Послуга', style: TextStyle(color: Styles().titleColor)),
-                                  iconEnabledColor: Styles().titleColor,
-                                  dropdownColor: Styles().primaryColor,
-                                  items: [
-                                    DropdownMenuItem<DropdownItem>(
-                                      value: null,
-                                      child: Text(
-                                        'Всі послуги',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(color: Styles().titleColor, fontStyle: FontStyle.italic),
-                                      ),
-                                    ),
-                                    ...serviceProvider.services.map(
-                                      (s) => DropdownMenuItem<DropdownItem>(
-                                        value: DropdownItem(id: s.id, name: s.name),
-                                        child: Text(
-                                          s.name,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(color: Styles().titleColor),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  onChanged: (DropdownItem? item) async {
-                                    setState(() {
-                                      selectedService = item;
-                                      filterServiceId = item?.id;
-                                      mapMasters.clear();
-                                      masters.clear();
-                                      loading = true;
-                                      currentPage = 1;
-                                      _selectedMasterId = null;
-                                      selectedIndex = -1;
-                                    });
-                                    if (currentLocation != null) {
-                                      await _loadMapData(currentLocation!);
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (_isMaster) ...[
-                            const SizedBox(width: 8),
-                            FloatingActionButton(
-                    heroTag: 'availability_fab',
-                    onPressed: _toggleAvailability,
-                      backgroundColor: Styles().primaryColor,
-                      elevation: 10.0,
-                              child: Icon(
-                                _isAvailable 
-                                  ? Icons.timer_off_outlined
-                                  : Icons.timer_outlined,
-                                color: _isAvailable ? Colors.greenAccent : Styles().titleColor,
-                      size: 28,
-                    ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              
-              // Extra button allowing masters to toggle their availability.
-              // if (_isMaster)
-              // Positioned(
-              //     right: 10,
-              //     top: MediaQuery.of(context).size.height * 0.15,
-              //     child: FloatingActionButton(
-              //       heroTag: 'availability_fab',
-              //       onPressed: _toggleAvailability,
-              //       backgroundColor: Styles().primaryColor,
-              //       elevation: 10.0,
-              //       child: Icon(
-              //         _isAvailable ? Icons.toggle_on : Icons.toggle_off,
-              //         color: _isAvailable ? Colors.greenAccent : Colors.grey,
-              //         size: 28,
-              //       ),
-              //     ),
-              //   ),
-              Positioned.fill(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  switchInCurve: Curves.easeOut,
-                  switchOutCurve: Curves.easeIn,
-                  transitionBuilder: (child, animation) {
-                    final offsetAnimation = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
-                        .chain(CurveTween(curve: Curves.easeOutCubic))
-                        .animate(animation);
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(position: offsetAnimation, child: child),
-                    );
-                  },
-                  child: (_selectedMasterId != null && visibleMasters.any((m) => m.id == _selectedMasterId))
-                      ? DraggableScrollableSheet(
-                          key: ValueKey('sheet_${_selectedMasterId}'),
-                          maxChildSize: 0.31,
-                          initialChildSize: 0.31,
-                          minChildSize: 0.07,
-                          builder: (BuildContext context, scrollController) {
-                            final idx = visibleMasters.indexWhere((m) => m.id == _selectedMasterId);
-                            if (idx == -1) {
-                              return const SizedBox.shrink();
-                            }
-                            final master = visibleMasters[idx];
-                            return CustomScrollView(
-                              controller: scrollController,
-                              slivers: [
-                                SliverToBoxAdapter(
-                                  child: SizedBox(
-                                    height: MediaQuery.of(context).size.height * 0.3,
-                                    child: Stack(
-                                      children: [
-                                        MapCard(item: master),
-                                        Positioned(
-                                          top: 20,
-                                          left: 0,
-                                          right: 0,
-                                          child: Center(
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                color: Theme.of(context).hintColor,
-                                                borderRadius: const BorderRadius.all(
-                                                  Radius.circular(
-                                                    Styles.borderRadius,
+                                  child:
+                                      _masterPhoto != null &&
+                                              _masterPhoto!.isNotEmpty
+                                          ? ClipOval(
+                                            child: Image.network(
+                                              _buildPhotoUrl(_masterPhoto!),
+                                              width: 56,
+                                              height: 56,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (_, __, ___) => const Icon(
+                                                    Icons.person,
+                                                    color: Colors.blueGrey,
+                                                    size: 30,
                                                   ),
-                                                ),
-                                              ),
-                                              height: 4,
-                                              width: 40,
                                             ),
+                                          )
+                                          : const Icon(
+                                            Icons.person,
+                                            color: Colors.white,
+                                            size: 30,
                                           ),
-                    ),
-                  ],
-                ),
-              ),
+                                ),
+                      ),
+                      const SizedBox(width: 8),
+                      FloatingActionButton.extended(
+                        heroTag: 'service_filter_fab',
+                        onPressed: () {},
+                        backgroundColor: Styles().primaryColor,
+                        elevation: 10.0,
+                        label: SizedBox(
+                          width: 200,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<DropdownItem>(
+                              isExpanded: true,
+                              value: selectedService,
+                              hint: Text(
+                                'Послуга',
+                                style: TextStyle(color: Styles().titleColor),
+                              ),
+                              iconEnabledColor: Styles().titleColor,
+                              dropdownColor: Styles().primaryColor,
+                              items: [
+                                DropdownMenuItem<DropdownItem>(
+                                  value: null,
+                                  child: Text(
+                                    'Всі послуги',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Styles().titleColor,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                                ...serviceProvider.services.map(
+                                  (s) => DropdownMenuItem<DropdownItem>(
+                                    value: DropdownItem(id: s.id, name: s.name),
+                                    child: Text(
+                                      s.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Styles().titleColor,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
-                            );
-                          },
-                        )
-                      : const SizedBox.shrink(),
+                              onChanged: (DropdownItem? item) async {
+                                setState(() {
+                                  selectedService = item;
+                                  filterServiceId = item?.id;
+                                  mapMasters.clear();
+                                  masters.clear();
+                                  loading = true;
+                                  currentPage = 1;
+                                  _selectedMasterId = null;
+                                  selectedIndex = -1;
+                                });
+                                if (currentLocation != null) {
+                                  await _loadMapData(currentLocation!);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_isMaster) ...[
+                        const SizedBox(width: 8),
+                        FloatingActionButton(
+                          heroTag: 'availability_fab',
+                          onPressed: _toggleAvailability,
+                          backgroundColor: Styles().primaryColor,
+                          elevation: 10.0,
+                          child: Icon(
+                            _isAvailable
+                                ? Icons.timer_off_outlined
+                                : Icons.timer_outlined,
+                            color:
+                                _isAvailable
+                                    ? Colors.greenAccent
+                                    : Styles().titleColor,
+                            size: 28,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-              if (loading)
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black54,
-                    child: const Center(child: Loading()),
-                  ),
-                ),
-            ],
+                );
+              },
+            ),
           ),
-        );
+
+          // Extra button allowing masters to toggle their availability.
+          // if (_isMaster)
+          // Positioned(
+          //     right: 10,
+          //     top: MediaQuery.of(context).size.height * 0.15,
+          //     child: FloatingActionButton(
+          //       heroTag: 'availability_fab',
+          //       onPressed: _toggleAvailability,
+          //       backgroundColor: Styles().primaryColor,
+          //       elevation: 10.0,
+          //       child: Icon(
+          //         _isAvailable ? Icons.toggle_on : Icons.toggle_off,
+          //         color: _isAvailable ? Colors.greenAccent : Colors.grey,
+          //         size: 28,
+          //       ),
+          //     ),
+          //   ),
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, animation) {
+                final offsetAnimation = Tween<Offset>(
+                      begin: const Offset(0, 0.1),
+                      end: Offset.zero,
+                    )
+                    .chain(CurveTween(curve: Curves.easeOutCubic))
+                    .animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  ),
+                );
+              },
+              child:
+                  (_selectedMasterId != null &&
+                          visibleMasters.any((m) => m.id == _selectedMasterId))
+                      ? Builder(builder: (context) {
+                          final idx = visibleMasters.indexWhere((m) => m.id == _selectedMasterId);
+                          if (idx == -1) return const SizedBox.shrink();
+                          final master = visibleMasters[idx];
+                          return MasterExpandableSheet(key: ValueKey('expand_${master.id}'), master: master);
+                        })
+                       : const SizedBox.shrink(),
+            ),
+          ),
+          if (loading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black54,
+                child: const Center(child: Loading()),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1015,7 +1057,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
 
   void _startRefreshTimer() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(refreshInterval, (_) => _softRefreshMasters());
+    _refreshTimer = Timer.periodic(
+      refreshInterval,
+      (_) => _softRefreshMasters(),
+    );
   }
 
   void _stopRefreshTimer() {
@@ -1039,12 +1084,14 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     if (totalPages > 1) {
       final List<Future<List<Master>>> futures = [];
       for (int page = 2; page <= totalPages; page++) {
-        futures.add(getData(
-          currentLocation!.longitude,
-          currentLocation!.latitude,
-          page,
-          mapController.camera.zoom,
-        ));
+        futures.add(
+          getData(
+            currentLocation!.longitude,
+            currentLocation!.latitude,
+            page,
+            mapController.camera.zoom,
+          ),
+        );
       }
       final results = await Future.wait(futures);
       for (final list in results) {
@@ -1092,13 +1139,13 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     if (_isUpdatingMasterStatus) return;
     try {
       _isUpdatingMasterStatus = true;
-    final user = await UserService().getUser();
-    if (!mounted) return;
-    setState(() {
-      _isMaster = user?.master != null;
-      _masterPhoto = user?.master?.mainPhoto;
-    });
-    await _refreshOwnAvailabilityFromServer();
+      final user = await UserService().getUser();
+      if (!mounted) return;
+      setState(() {
+        _isMaster = user?.master != null;
+        _masterPhoto = user?.master?.mainPhoto;
+      });
+      await _refreshOwnAvailabilityFromServer();
     } finally {
       _isUpdatingMasterStatus = false;
     }
@@ -1115,24 +1162,46 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     }
     try {
       final api = ApiService(AppConstants.serverUrl);
-      final res = await api.getRequest('masters/${user!.master!.id}/availability');
+      final res = await api.getRequest(
+        'masters/${user!.master!.id}/availability',
+      );
       bool serverAvailable = false;
       if (res is Map) {
         if (res.containsKey('available')) {
           final val = res['available'];
-          if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+          if (val is bool)
+            serverAvailable = val;
+          else if (val is num)
+            serverAvailable = val != 0;
+          else if (val is String)
+            serverAvailable = val == '1' || val.toLowerCase() == 'true';
         } else if (res.containsKey('availability')) {
           final val = res['availability'];
-          if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+          if (val is bool)
+            serverAvailable = val;
+          else if (val is num)
+            serverAvailable = val != 0;
+          else if (val is String)
+            serverAvailable = val == '1' || val.toLowerCase() == 'true';
         } else if (res.containsKey('data')) {
           final data = res['data'];
           if (data is Map) {
             if (data.containsKey('available')) {
               final val = data['available'];
-              if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+              if (val is bool)
+                serverAvailable = val;
+              else if (val is num)
+                serverAvailable = val != 0;
+              else if (val is String)
+                serverAvailable = val == '1' || val.toLowerCase() == 'true';
             } else if (data.containsKey('availability')) {
               final val = data['availability'];
-              if (val is bool) serverAvailable = val; else if (val is num) serverAvailable = val != 0; else if (val is String) serverAvailable = val == '1' || val.toLowerCase() == 'true';
+              if (val is bool)
+                serverAvailable = val;
+              else if (val is num)
+                serverAvailable = val != 0;
+              else if (val is String)
+                serverAvailable = val == '1' || val.toLowerCase() == 'true';
             }
           }
         }
@@ -1156,19 +1225,29 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
         await _refreshOwnAvailabilityFromServer();
         await _softRefreshMasters();
         if (!mounted) return;
-        AppToast.show('Ви стали зайнятими', background: Colors.green,duration: Duration(seconds: 5));
+        AppToast.show(
+          'Ви стали зайнятими',
+          background: Colors.green,
+          duration: Duration(seconds: 5),
+        );
       } else {
         _showAvailabilitySheet();
       }
     } catch (e) {
       if (!mounted) return;
-      AppToast.show('Не вдалося оновити доступність', background: Colors.red,duration: Duration(seconds: 5));
+      AppToast.show(
+        'Не вдалося оновити доступність',
+        background: Colors.red,
+        duration: Duration(seconds: 5),
+      );
     }
   }
 
   void _showAvailabilitySheet() {
     int minutes = 60;
-    final TextEditingController ctrl = TextEditingController(text: minutes.toString());
+    final TextEditingController ctrl = TextEditingController(
+      text: minutes.toString(),
+    );
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -1202,7 +1281,11 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
               const SizedBox(height: 12),
               Text(
                 'Стати вільним на:',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Styles().titleColor),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Styles().titleColor,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -1232,7 +1315,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                             width: 2,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                         suffixIcon: Icon(
                           Icons.timer_outlined,
                           color: Styles().primaryColor,
@@ -1264,7 +1350,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                           minutes += 30;
                           ctrl.text = minutes.toString();
                         },
-                        child: Text('+30 хв', style: TextStyle(color: Styles().primaryColor)),
+                        child: Text(
+                          '+30 хв',
+                          style: TextStyle(color: Styles().primaryColor),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
@@ -1278,7 +1367,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                           minutes = (minutes - 30).clamp(30, 24 * 60);
                           ctrl.text = minutes.toString();
                         },
-                        child: Text('-30 хв', style: TextStyle(color: Styles().primaryColor)),
+                        child: Text(
+                          '-30 хв',
+                          style: TextStyle(color: Styles().primaryColor),
+                        ),
                       ),
                     ],
                   ),
@@ -1296,7 +1388,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                         ),
                       ),
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text('Скасувати', style: TextStyle(color: Styles().primaryColor)),
+                      child: Text(
+                        'Скасувати',
+                        style: TextStyle(color: Styles().primaryColor),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1314,7 +1409,10 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                         Navigator.pop(ctx);
                         await _setAvailability(duration);
                       },
-                      child: Text('Стати вільним', style: TextStyle(color: Styles().primaryColor)),
+                      child: Text(
+                        'Стати вільним',
+                        style: TextStyle(color: Styles().primaryColor),
+                      ),
                     ),
                   ),
                 ],
@@ -1339,10 +1437,18 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
       await _refreshOwnAvailabilityFromServer();
       await _softRefreshMasters();
       if (!mounted) return;
-      AppToast.show('Ви стали вільним на $durationMinutes хв', background: Colors.green,duration: Duration(seconds: 5));
+      AppToast.show(
+        'Ви стали вільним на $durationMinutes хв',
+        background: Colors.green,
+        duration: Duration(seconds: 5),
+      );
     } catch (e) {
       if (!mounted) return;
-      AppToast.show('Не вдалося встановити доступність', background: Colors.red,duration: Duration(seconds: 5));
+      AppToast.show(
+        'Не вдалося встановити доступність',
+        background: Colors.red,
+        duration: Duration(seconds: 5),
+      );
     }
   }
 
@@ -1400,9 +1506,13 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
 
   String _buildPhotoUrl(String path) {
     if (path.startsWith('http')) return path;
-    final base = AppConstants.publicServerUrl.endsWith('/')
-        ? AppConstants.publicServerUrl.substring(0, AppConstants.publicServerUrl.length - 1)
-        : AppConstants.publicServerUrl;
+    final base =
+        AppConstants.publicServerUrl.endsWith('/')
+            ? AppConstants.publicServerUrl.substring(
+              0,
+              AppConstants.publicServerUrl.length - 1,
+            )
+            : AppConstants.publicServerUrl;
     return path.startsWith('/') ? '$base$path' : '$base/$path';
   }
 
@@ -1410,19 +1520,21 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
     if (!_isMaster) {
       return Icon(Icons.add_location_alt_outlined, color: Styles().titleColor);
     }
-    
+
     if (_masterPhoto != null && _masterPhoto!.isNotEmpty) {
       return ClipOval(
         child: Image.network(
           _buildPhotoUrl(_masterPhoto!),
-        width: 56,
-        height: 56,
+          width: 56,
+          height: 56,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.grey, size: 30),
+          errorBuilder:
+              (_, __, ___) =>
+                  const Icon(Icons.person, color: Colors.grey, size: 30),
         ),
       );
     }
-    
+
     return const Icon(Icons.person, color: Colors.grey, size: 30);
   }
 
@@ -1448,13 +1560,16 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                   width: 40,
                   height: 4,
                   margin: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                     color: Theme.of(context).hintColor,
                     borderRadius: const BorderRadius.all(Radius.circular(8)),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
                   child: Row(
                     children: [
                       Text(
@@ -1462,7 +1577,7 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
-                          color: Styles().titleColor
+                          color: Styles().titleColor,
                         ),
                       ),
                       const Spacer(),
@@ -1475,12 +1590,13 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
                 ),
                 const Divider(height: 1),
                 Expanded(
-                  child: _isMaster 
-                    ? const MasterProfileSheet()
-                    : MasterRegistrationFlowSheet(
-                        phone: '',
-                        parentContext: context,
-                      ),
+                  child:
+                      _isMaster
+                          ? const MasterProfileSheet()
+                          : MasterRegistrationFlowSheet(
+                            phone: '',
+                            parentContext: context,
+                          ),
                 ),
               ],
             );
@@ -1488,6 +1604,37 @@ class MapViewState extends State<MapView> with TickerProviderStateMixin, Widgets
         );
       },
     );
+  }
+
+  void _handleNotification(Map<String, dynamic> data) {
+    try {
+      final type = (data['type'] ?? data['event'] ?? '').toString().toLowerCase();
+      if (type.isEmpty || (!type.contains('avail'))) return;
+      final dynamic idRaw = data['master_id'] ?? data['id'] ?? data['master'];
+      if (idRaw == null) return;
+      final int? masterId = int.tryParse(idRaw.toString());
+      if (masterId == null) return;
+      final dynamic availRaw = data['available'] ?? data['status'] ?? data['is_available'];
+      bool? available;
+      if (availRaw is bool) available = availRaw;
+      else if (availRaw is num) available = availRaw != 0;
+      else if (availRaw is String) available = availRaw == '1' || availRaw.toLowerCase() == 'true';
+      if (available == null) return;
+
+      bool changed = false;
+      for (int i = 0; i < mapMasters.length; i++) {
+        if (mapMasters[i].id == masterId && mapMasters[i].available != available) {
+          mapMasters[i].available = available;
+          changed = true;
+          break;
+        }
+      }
+      if (changed) {
+        _lightMarkerCache.remove(masterId * 10 + 1);
+        _lightMarkerCache.remove(masterId * 10 + 0);
+        _updateVisibleMasters();
+      }
+    } catch (_) {}
   }
 }
 
@@ -1508,7 +1655,8 @@ class _BouncingDot extends StatefulWidget {
   State<_BouncingDot> createState() => _BouncingDotState();
 }
 
-class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderStateMixin {
+class _BouncingDotState extends State<_BouncingDot>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
@@ -1550,7 +1698,8 @@ class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderSta
     return AnimatedBuilder(
       animation: _controller,
       builder: (_, child) {
-        final double progress = widget.bounce ? Curves.easeInOut.transform(_controller.value) : 0.0;
+        final double progress =
+            widget.bounce ? Curves.easeInOut.transform(_controller.value) : 0.0;
         final double amplitude = (widget.size * 0.35).clamp(4.0, 12.0);
         final double dy = -amplitude * progress;
         return Transform.translate(
@@ -1561,17 +1710,23 @@ class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderSta
             decoration: BoxDecoration(
               color: widget.color,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: widget.isActive ? 2 : 1),
-              boxShadow: widget.isActive
-                  ? [
-                      BoxShadow(
-                        color: (widget.color == Colors.blue ? Colors.blueAccent : Colors.grey)
-                            .withOpacity(0.5),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
+              border: Border.all(
+                color: Colors.white,
+                width: widget.isActive ? 2 : 1,
+              ),
+              boxShadow:
+                  widget.isActive
+                      ? [
+                        BoxShadow(
+                          color: (widget.color == Colors.blue
+                                  ? Colors.blueAccent
+                                  : Colors.grey)
+                              .withOpacity(0.5),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                      : null,
             ),
           ),
         );

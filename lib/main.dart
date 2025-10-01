@@ -28,6 +28,7 @@ import 'classes/app_themes.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:carbeat/navigation/route_observer.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:carbeat/services/api_services/api_service.dart';
 
 void main() async {
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -50,6 +51,14 @@ void main() async {
   String? savedLanguage = await LanguageService.getLanguage();
   final tokenService = TokenService();
   final token = await tokenService.getToken();
+
+  // Check auth on app start and try to refresh if needed
+  try {
+    if (token != null && !await tokenService.isTokenValid()) {
+      await ApiService(AppConstants.serverUrl).refreshToken();
+    }
+  } catch (_) {}
+
   try {
     await FMTCObjectBoxBackend().initialise();
     await const FMTCStore('mapStore').manage.create();
@@ -100,6 +109,14 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   Key key = UniqueKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FCMService.initializeFCM(context: context);
+    });
+  }
 
   void restartApp() {
     setState(() {

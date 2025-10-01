@@ -45,16 +45,16 @@ class ApiService {
     final tokenService = TokenService();
     String? accessToken = await tokenService.getAccessToken();
 
-    // Перевіряємо строк дії токена
-    if (accessToken != null && _isTokenExpired(accessToken)) {
-      final refreshed = await _refreshToken();
-      if (refreshed) {
-        accessToken = await tokenService.getAccessToken();
-      } else {
-        // refresh не спрацював — прибираємо токени, щоб викликати повторний логін
-        await tokenService.deleteTokens();
-        await UserService().deleteUser();
-        accessToken = null;
+    if (accessToken != null) {
+      final isValid = await tokenService.isTokenValid();
+      if (!isValid) {
+        final refreshed = await refreshToken();
+        if (refreshed) {
+          accessToken = await tokenService.getAccessToken();
+        } else {
+          // Keep tokens; do not auto-logout
+          accessToken = null;
+        }
       }
     }
 
@@ -89,24 +89,20 @@ class ApiService {
       response = await requestFn();
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
-        // Спробуємо оновити й повторити запит.
-        final refreshed = await _refreshToken();
+        // Try to refresh and retry the request
+        final refreshed = await refreshToken();
         if (refreshed) {
           await _ensureAuthorizedHeaders();
           try {
           return await requestFn();
           } catch (retryError) {
-            await TokenService().deleteTokens();
-            await UserService().deleteUser();
             rethrow;
           }
         } else {
-          // refresh не вдався — чистимо токени і дані користувача
-          await TokenService().deleteTokens();
-          await UserService().deleteUser();
+          // Do not purge tokens; bubble up the error
           throw DioException(
             requestOptions: e.requestOptions,
-            error: 'Session expired',
+            error: 'Unauthorized',
             response: e.response,
           );
         }
@@ -116,12 +112,10 @@ class ApiService {
     return response;
   }
 
-  Future<bool> _refreshToken() async {
+  Future<bool> refreshToken() async {
     final tokenService = TokenService();
     String? refreshToken = await tokenService.getRefreshToken();
     if (refreshToken == null || refreshToken.isEmpty) {
-      await tokenService.deleteTokens();
-      await UserService().deleteUser();
       return false;
     }
     
@@ -136,16 +130,13 @@ class ApiService {
         await tokenService.saveTokens(
           response.data['access_token'],
           response.data['refresh_token'],
+          expiresInSeconds: response.data['expires_in'] is int ? response.data['expires_in'] as int : null,
         );
         return true;
       }
       
-      await tokenService.deleteTokens();
-      await UserService().deleteUser();
       return false;
     } catch (_) {
-      await tokenService.deleteTokens();
-      await UserService().deleteUser();
       return false;
     }
   }
