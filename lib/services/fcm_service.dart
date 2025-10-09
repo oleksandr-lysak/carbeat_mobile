@@ -1,10 +1,18 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:carbeat/firebase_options.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:carbeat/services/log_service.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/notification_provider.dart';
+
+// Top-level background handler must be a global function
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Ensure Firebase is initialized in background isolate
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
 
 class FCMService {
   static final FirebaseMessaging _firebaseMessaging =
@@ -34,7 +42,7 @@ class FCMService {
     required BuildContext context,
   }) async {
     // Налаштування обробника для повідомлень у фоновому режимі
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     // Налаштування обробника для повідомлень, коли аплікація активна
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -43,19 +51,11 @@ class FCMService {
       Provider.of<NotificationsProvider>(context, listen: false)
           .addNotification(message.data);
     });
+  }
 
-    // Запит дозволу для iOS
+  static Future<void> requestNotificationPermission() async {
     await _firebaseMessaging.requestPermission();
-
-    // Отримання токена
-    // String? token = await _firebaseMessaging.getToken();
-    // if (token != null) {
-    //   await saveToken(token);
-    //   LogService.log("FCM Token: $token");
-    // }
   }
 
-  static Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-    LogService.log("Handling a background message: ${message.messageId}");
-  }
+  // Foreground/background tap handling can be added here if needed
 }

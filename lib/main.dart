@@ -1,5 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_performance/firebase_performance.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,8 +18,11 @@ import 'package:carbeat/providers/notification_provider.dart';
 import 'package:carbeat/providers/service_provider.dart';
 import 'package:carbeat/providers/theme_provider.dart';
 import 'package:carbeat/services/fcm_service.dart';
+import 'package:carbeat/services/analytics_service.dart';
+import 'package:carbeat/services/dynamic_links_service.dart';
 import 'package:carbeat/services/language_service.dart';
 import 'package:carbeat/services/log_service.dart';
+import 'package:carbeat/services/update_service.dart';
 import 'package:carbeat/services/api_services/service_service.dart';
 import 'package:carbeat/services/token_service.dart';
 import 'package:carbeat/services/user_service.dart';
@@ -31,22 +37,37 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:carbeat/services/api_services/api_service.dart';
 
 void main() async {
-  FlutterError.onError = (FlutterErrorDetails details) {
-    if (kReleaseMode) {
-      LogService.log('FlutterError: ${details.exception.toString()}');
-      LogService.log('Stack trace: ${details.stack.toString()}');
-    } else {
-      LogService.log(details.toString());
-    }
-  };
-
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
-  WidgetsFlutterBinding.ensureInitialized();
 
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
-  // );
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Crashlytics handlers
+  FlutterError.onError = (FlutterErrorDetails details) {
+    if (kReleaseMode) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    }
+    LogService.log(details.toString());
+  };
+
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    if (kReleaseMode) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
+    // Also log locally
+    LogService.log('Uncaught zone error: $error');
+    LogService.log(stack.toString());
+    return true;
+  };
+
+  await FirebaseCrashlytics.instance
+      .setCrashlyticsCollectionEnabled(kReleaseMode);
+
+  // Performance collection
+  await FirebasePerformance.instance
+      .setPerformanceCollectionEnabled(kReleaseMode);
   final specialtyService = ServiceService();
   String? savedLanguage = await LanguageService.getLanguage();
   final tokenService = TokenService();
@@ -94,6 +115,43 @@ void main() async {
   );
 }
 
+class _LifecycleWrapper extends StatefulWidget {
+  final VoidCallback onResumed;
+  final Widget child;
+
+  const _LifecycleWrapper({required this.onResumed, required this.child});
+
+  @override
+  State<_LifecycleWrapper> createState() => _LifecycleWrapperState();
+}
+
+class _LifecycleWrapperState extends State<_LifecycleWrapper>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      widget.onResumed();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
+}
+
 class MyApp extends StatefulWidget {
   final String? savedLanguage;
   final String? token;
@@ -115,6 +173,9 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FCMService.initializeFCM(context: context);
+      DynamicLinksService.handleInitialAndListen(context);
+      AnalyticsService.logAppOpen();
+      UpdateService.checkForUpdates(context);
     });
   }
 
@@ -138,7 +199,17 @@ class _MyAppState extends State<MyApp> {
         return MaterialApp(
           key: key,
           scrollBehavior: AppScrollBehavior(),
-          navigatorObservers: [routeObserver],
+          navigatorObservers: [
+            routeObserver,
+            FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+          ],
+          builder: (context, child) {
+            // Check updates when app resumes to foreground
+            return _LifecycleWrapper(
+              onResumed: () => UpdateService.checkForUpdates(context),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           
           localizationsDelegates: [
             FlutterI18nDelegate(
@@ -165,7 +236,7 @@ class _MyAppState extends State<MyApp> {
             '/summary-info': (context) => const SummaryInfoPage(),
             '/home-page': (context) => const HomePage(),
             '/settings-page': (context) => const HomePage(),
-          }
+          },
         );
       });
     });

@@ -15,17 +15,18 @@ class ClusterCircle extends StatelessWidget {
 
     final Color baseGreen = Styles().primaryColor;
 
+    // Dynamically scale cluster size to ensure multi-digit labels fit (up to 5+ digits)
     double size;
-    double fontSize;
     if (count < 10) {
-      size = 60;
-      fontSize = 18;
+      size = 52;
     } else if (count < 100) {
-      size = 75;
-      fontSize = 20;
+      size = 60;
+    } else if (count < 1000) {
+      size = 72;
+    } else if (count < 10000) {
+      size = 88; // 4 digits
     } else {
-      size = 90;
-      fontSize = 22;
+      size = 104; // 5+ digits
     }
 
     Widget base = Container(
@@ -46,13 +47,17 @@ class ClusterCircle extends StatelessWidget {
       children: [
         base,
         Center(
-          child: Text(
-            '$count',
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              shadows: const [Shadow(color: Colors.black45, blurRadius: 2)],
+          // FittedBox ensures the text scales to fit the available circle size
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 28, // base; will be scaled down by FittedBox as needed
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
+              ),
             ),
           ),
         ),
@@ -70,10 +75,14 @@ class ClusterCircle extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           base,
-          const Positioned(
+          Positioned(
             top: -6,
             right: -6,
-            child: Icon(Icons.star, color: Color(0xFFFFD700), size: 24),
+            child: Icon(
+              Icons.star,
+              color: const Color(0xFFFFD700),
+              size: (size * 0.28).clamp(18.0, 26.0),
+            ),
           ),
         ],
       );

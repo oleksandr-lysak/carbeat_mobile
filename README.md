@@ -50,3 +50,48 @@ flutter pub get
 
 # Run on connected device
 flutter run
+```
+
+---
+
+## 🔄 Автоматичні оновлення (Google Play In‑App Updates)
+
+### Що реалізовано
+- **Критичні оновлення (Immediate)**: якщо поточний `buildNumber` нижчий за `min_supported_build` із Remote Config — запускається системний блокуючий флоу оновлення. Якщо недоступно — показується блокуючий діалог з кнопкою для відкриття сторінки застосунку в Play.
+- **Рекомендовані оновлення (Flexible)**: якщо `buildNumber` нижчий за `recommended_build` — показується модальне вікно з пропозицією оновити. Завантаження відбувається у фоні; після завантаження — кнопка перезапуску для встановлення. Показ модалки тротлиться через `flexible_throttle_hours`.
+- **Перевірки** виконуються під час старту застосунку та при поверненні у foreground.
+
+### Налаштування Firebase Remote Config
+Задайте параметри й опублікуйте:
+- `min_supported_build` (number): мінімально підтримуваний білд; нижче → примусове оновлення (Immediate).
+- `recommended_build` (number): рекомендований білд; нижче → пропозиція оновлення (Flexible).
+- `flexible_throttle_hours` (number): інтервал між показами модалки Flexible (години), дефолт 24.
+
+Примітки:
+- In‑App Updates працюють лише для інсталяцій із Google Play.
+- Обовʼязково збільшуйте Android `build-number` (`versionCode`) у кожному релізі.
+
+### Інтеграція у застосунку
+- Сервіси:
+  - `lib/services/remote_config_service.dart` — завантаження політики.
+  - `lib/services/update_service.dart` — логіка Immediate/Flexible, тротлінг, fallback у Play.
+  - `lib/services/analytics_service.dart` — події `update_*` у Firebase Analytics.
+- Запуск перевірок:
+  - На старті: `UpdateService.checkForUpdates(context)` у `lib/main.dart` (`initState`).
+  - При поверненні у foreground: через `_LifecycleWrapper` у `MaterialApp.builder`.
+- Локалізація текстів оновлення: ключі `update.*` у `assets/i18n/en.json` та `assets/i18n/uk.json`.
+
+### Як користуватись
+1. Публікуйте нову версію у Play з більшим `build-number`.
+2. У Firebase Remote Config встановіть:
+   - Для примусового оновлення: `min_supported_build` > поточного білда у користувачів.
+   - Для мʼякого оновлення: `recommended_build` > поточного, але `min_supported_build` ≤ поточного.
+3. Натисніть Publish у Remote Config та дочекайтесь застосування політики (додаток виконує `fetchAndActivate`).
+
+### Тестування
+- Перевіряйте через Internal/Closed тест-треки у Play Console.
+- Зверніть увагу, що In‑App Updates не працюють для встановлень поза Play.
+
+### Обмеження та примітки
+- Повністю автоматичне встановлення без взаємодії користувача недоступне через політики Android. Режим Immediate максимально наближений до примусового, але із системним UX.
+- Якщо In‑App Updates недоступні, застосунок покаже блокуючий діалог із переходом у Play.

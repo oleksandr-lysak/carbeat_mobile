@@ -119,5 +119,16 @@
     "invalid_phone": "Invalid phone number",
     "cancel": "Cancel",
     "submit": "Submit"
+  },
+  "update": {
+    "title": "Update available",
+    "body_recommended": "A new version is available. Update now for the best experience.",
+    "body_critical": "A critical update is required to continue using the app.",
+    "update_now": "Update now",
+    "later": "Later",
+    "downloading": "Downloading update...",
+    "restart_now": "Restart to install",
+    "ready_to_install": "Update downloaded. Restart to finish.",
+    "open_play": "Open Play Store"
   }
 }

@@ -328,20 +328,29 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Styles().backgroundFormColor,
+                              backgroundColor: Styles().primaryColor,
                               minimumSize: const Size.fromHeight(48),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
+                              elevation: 0,
                             ),
                             onPressed: _openAdditionalServicesDialog,
-                            child: Text(
-                              'Додаткові послуги',
-                              style: TextStyle(
-                                color: Styles().primaryColor,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.design_services, color: Colors.white),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Додаткові послуги',
+                                  style: TextStyle(
+                                    color: Styles().titleColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -349,20 +358,29 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Styles().backgroundFormColor,
+                              backgroundColor: Styles().primaryColor,
                               minimumSize: const Size.fromHeight(48),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
+                              elevation: 0,
                             ),
                             onPressed: _addGalleryPhotos,
-                            child: Text(
-                              'Додати фото',
-                              style: TextStyle(
-                                color: Styles().primaryColor,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.add_a_photo, color: Colors.white),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Додати фото',
+                                  style: TextStyle(
+                                    color: Styles().titleColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -386,7 +404,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                         child: LinearProgressIndicator(
                           value: _uploadProgress > 0 && _uploadProgress <= 1 ? _uploadProgress : null,
                           backgroundColor: Styles().backgroundFormColor,
-                          color: Styles().checkColor,
+                          color: Styles().primaryColor,
                         ),
                       ),
                     const SizedBox(height: 8),
@@ -435,20 +453,29 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                     const SizedBox(height: 24),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Styles().backgroundFormColor,
+                        backgroundColor: Styles().primaryColor,
                         minimumSize: const Size.fromHeight(50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
+                        elevation: 0,
                       ),
                       onPressed: _save,
-                      child: Text(
-                        'Зберегти',
-                        style: TextStyle(
-                          color: Styles().primaryColor,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.save, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Зберегти',
+                            style: TextStyle(
+                              color: Styles().titleColor,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -566,48 +593,66 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (dialogCtx, setSB) {
-            return AlertDialog(
-              backgroundColor: Styles().primaryColor,
-              title: Text('Додаткові послуги', style: TextStyle(color: Styles().titleColor)),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: items.length,
-                  itemBuilder: (_, i) {
-                    final svc = items[i];
-                    final checked = draft.contains(svc.id);
-                    return CheckboxListTile(
-                      value: checked,
-                      onChanged: (v) {
-                        if (v == true) {
-                          draft.add(svc.id);
-                        } else {
-                          draft.remove(svc.id);
-                        }
-                        setSB(() {});
-                      },
-                      title: Text(svc.name, style: TextStyle(color: Styles().titleColor)),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      activeColor: Styles().checkColor,
-                    );
-                  },
+            return Theme(
+              data: Theme.of(context).copyWith(
+                checkboxTheme: CheckboxThemeData(
+                  fillColor: MaterialStateProperty.all(Styles().primaryColor),
+                  checkColor: MaterialStateProperty.all(Styles().titleColor),
+                  side: BorderSide(color: Styles().primaryColor.withOpacity(0.4), width: 1.2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
+                unselectedWidgetColor: Styles().titleColor,
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text('Скасувати', style: TextStyle(color: Styles().titleColor)),
+              child: AlertDialog(
+                backgroundColor: Styles().primaryColor,
+                title: Text('Додаткові послуги', style: TextStyle(color: Styles().titleColor)),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    itemBuilder: (_, i) {
+                      final svc = items[i];
+                      final checked = draft.contains(svc.id);
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Styles().backgroundFormColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: CheckboxListTile(
+                          value: checked,
+                          onChanged: (v) {
+                            if (v == true) {
+                              draft.add(svc.id);
+                            } else {
+                              draft.remove(svc.id);
+                            }
+                            setSB(() {});
+                          },
+                          title: Text(svc.name, style: TextStyle(color: Styles().titleColor)),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor),
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await _saveAdditionalServices(draft);
-                  },
-                  child: Text('Зберегти', style: TextStyle(color: Styles().titleColor)),
-                ),
-              ],
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text('Скасувати', style: TextStyle(color: Styles().titleColor)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Styles().primaryColor, elevation: 0),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _saveAdditionalServices(draft);
+                    },
+                    child: Text('Зберегти', style: TextStyle(color: Styles().titleColor)),
+                  ),
+                ],
+              ),
             );
           },
         );

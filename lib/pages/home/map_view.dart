@@ -219,6 +219,12 @@ class MapViewState extends State<MapView>
         }
       }
 
+      // Request notifications permission AFTER location permission is handled
+      // to avoid blocking the initial location flow on first launch
+      try {
+        await FCMService.requestNotificationPermission();
+      } catch (_) {}
+
       // Try to get location with timeout
       LatLng? location;
       try {
@@ -919,7 +925,6 @@ class MapViewState extends State<MapView>
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: Styles().titleColor,
-                                      fontStyle: FontStyle.italic,
                                     ),
                                   ),
                                 ),
@@ -962,15 +967,19 @@ class MapViewState extends State<MapView>
                           onPressed: _toggleAvailability,
                           backgroundColor: Styles().primaryColor,
                           elevation: 10.0,
-                          child: Icon(
-                            _isAvailable
-                                ? Icons.timer_off_outlined
-                                : Icons.timer_outlined,
-                            color:
-                                _isAvailable
-                                    ? Colors.greenAccent
-                                    : Styles().titleColor,
-                            size: 28,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _isAvailable ? Styles().checkColor : Colors.white,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: Icon(
+                              _isAvailable ? Icons.toggle_on : Icons.toggle_off,
+                              color: _isAvailable ? Styles().titleColor : Styles().primaryColor,
+                              size: 24,
+                            ),
                           ),
                         ),
                       ],
@@ -1221,26 +1230,30 @@ class MapViewState extends State<MapView>
     try {
       final api = ApiService(AppConstants.serverUrl);
       if (_isAvailable) {
-        await api.deleteRequest('masters/${user!.master!.id}/availability');
-        await _refreshOwnAvailabilityFromServer();
-        await _softRefreshMasters();
-        if (!mounted) return;
-        AppToast.show(
-          'Ви стали зайнятими',
-          background: Colors.green,
-          duration: Duration(seconds: 5),
-        );
+        // Optimistic: go busy immediately
+        final bool prev = _isAvailable;
+        setState(() => _isAvailable = false);
+        await _applyOwnAvailabilityLocally(false);
+        try {
+          await api.deleteRequest('masters/${user!.master!.id}/availability');
+          // Optional: soft refresh in background
+          _refreshOwnAvailabilityFromServer();
+          _softRefreshMasters();
+        } catch (_) {
+          // Revert on failure
+          if (mounted) setState(() => _isAvailable = prev);
+          await _applyOwnAvailabilityLocally(prev);
+          if (mounted)
+            AppToast.show(
+              'Не вдалося змінити статус',
+              background: Colors.red,
+              duration: Duration(seconds: 5),
+            );
+        }
       } else {
         _showAvailabilitySheet();
       }
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.show(
-        'Не вдалося оновити доступність',
-        background: Colors.red,
-        duration: Duration(seconds: 5),
-      );
-    }
+    } catch (_) {}
   }
 
   void _showAvailabilitySheet() {
@@ -1339,9 +1352,15 @@ class MapViewState extends State<MapView>
                   const SizedBox(width: 12),
                   Column(
                     children: [
-                      ElevatedButton(
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                        label: Text(
+                          '+30 хв',
+                          style: TextStyle(color: Styles().titleColor),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Styles().backgroundFormColor,
+                          backgroundColor: Styles().primaryColor,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -1350,15 +1369,17 @@ class MapViewState extends State<MapView>
                           minutes += 30;
                           ctrl.text = minutes.toString();
                         },
-                        child: Text(
-                          '+30 хв',
-                          style: TextStyle(color: Styles().primaryColor),
-                        ),
                       ),
                       const SizedBox(height: 8),
-                      ElevatedButton(
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.remove, color: Colors.white, size: 18),
+                        label: Text(
+                          '-30 хв',
+                          style: TextStyle(color: Styles().titleColor),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Styles().backgroundFormColor,
+                          backgroundColor: Styles().primaryColor,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -1367,10 +1388,6 @@ class MapViewState extends State<MapView>
                           minutes = (minutes - 30).clamp(30, 24 * 60);
                           ctrl.text = minutes.toString();
                         },
-                        child: Text(
-                          '-30 хв',
-                          style: TextStyle(color: Styles().primaryColor),
-                        ),
                       ),
                     ],
                   ),
@@ -1380,28 +1397,33 @@ class MapViewState extends State<MapView>
               Row(
                 children: [
                   Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Styles().backgroundFormColor,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Styles().primaryColor, width: 1.5),
+                        foregroundColor: Styles().titleColor,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () => Navigator.pop(ctx),
                       child: Text(
                         'Скасувати',
-                        style: TextStyle(color: Styles().primaryColor),
+                        style: TextStyle(color: Styles().titleColor),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.timer, color: Colors.white),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Styles().backgroundFormColor,
+                        backgroundColor: Styles().primaryColor,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () async {
                         final n = int.tryParse(ctrl.text) ?? minutes;
@@ -1409,9 +1431,9 @@ class MapViewState extends State<MapView>
                         Navigator.pop(ctx);
                         await _setAvailability(duration);
                       },
-                      child: Text(
+                      label: Text(
                         'Стати вільним',
-                        style: TextStyle(color: Styles().primaryColor),
+                        style: TextStyle(color: Styles().titleColor),
                       ),
                     ),
                   ),
@@ -1427,6 +1449,16 @@ class MapViewState extends State<MapView>
   Future<void> _setAvailability(int durationMinutes) async {
     final user = await UserService().getUser();
     if (user?.master == null) return;
+    // Optimistic: become available immediately
+    final bool prev = _isAvailable;
+    setState(() => _isAvailable = true);
+    await _applyOwnAvailabilityLocally(true);
+    if (mounted)
+      AppToast.show(
+        'Ви стали вільним на $durationMinutes хв',
+        background: Colors.green,
+        duration: Duration(seconds: 5),
+      );
     try {
       final api = ApiService(AppConstants.serverUrl);
       final now = DateTime.now().toIso8601String();
@@ -1434,21 +1466,19 @@ class MapViewState extends State<MapView>
         'start_time': now,
         'duration': durationMinutes,
       });
-      await _refreshOwnAvailabilityFromServer();
-      await _softRefreshMasters();
-      if (!mounted) return;
-      AppToast.show(
-        'Ви стали вільним на $durationMinutes хв',
-        background: Colors.green,
-        duration: Duration(seconds: 5),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.show(
-        'Не вдалося встановити доступність',
-        background: Colors.red,
-        duration: Duration(seconds: 5),
-      );
+      // Background reconcile
+      _refreshOwnAvailabilityFromServer();
+      _softRefreshMasters();
+    } catch (_) {
+      // Revert on failure
+      if (mounted) setState(() => _isAvailable = prev);
+      await _applyOwnAvailabilityLocally(prev);
+      if (mounted)
+        AppToast.show(
+          'Не вдалося встановити доступність',
+          background: Colors.red,
+          duration: Duration(seconds: 5),
+        );
     }
   }
 
@@ -1635,6 +1665,23 @@ class MapViewState extends State<MapView>
         _updateVisibleMasters();
       }
     } catch (_) {}
+  }
+
+  Future<void> _applyOwnAvailabilityLocally(bool available) async {
+    final user = await UserService().getUser();
+    if (user?.master == null) return;
+    final int myId = user!.master!.id!;
+    bool changed = false;
+    for (int i = 0; i < mapMasters.length; i++) {
+      if (mapMasters[i].id == myId && mapMasters[i].available != available) {
+        mapMasters[i].available = available;
+        changed = true;
+        break;
+      }
+    }
+    if (changed && mounted) {
+      _updateVisibleMasters();
+    }
   }
 }
 
