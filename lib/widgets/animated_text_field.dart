@@ -41,12 +41,12 @@ class AnimatedTextFieldState extends State<AnimatedTextField> {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 18.0),
         decoration: BoxDecoration(
-          color: Styles().backgroundFormColor,
+          color: Styles().primaryColor,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: _isFocused
-                ? Styles().primaryColor
-                : Styles().primaryColor.withOpacity(0.3),
+                ? Styles().titleColor
+                : Styles().titleColor.withOpacity(0.3),
             width: _isFocused ? 2 : 1,
                   ),
         ),
@@ -60,14 +60,14 @@ class AnimatedTextFieldState extends State<AnimatedTextField> {
                 obscureText: widget.isPasswordField,
                 cursorColor: Styles().primaryColor,
                 style: TextStyle(
-                  color: Styles().primaryColor,
+                  color: Styles().titleColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
                 decoration: InputDecoration(
                   labelText: widget.labelText,
                   labelStyle: TextStyle(
-                    color: Styles().primaryColor.withOpacity(0.5),
+                    color: Styles().titleColor,
                     fontSize: 16,
                   ),
                   hintText: widget.hintText,

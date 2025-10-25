@@ -14,8 +14,8 @@ class AppConstants {
       "https://api.mapbox.com/styles/v1/rotting/$mapBoxStyleId/tiles/256/{z}/{x}/{y}@2x?access_token=$mapBoxAccessToken";
 
   //LOCAL_PHYSICAL_DEVICE
-  // static const String serverUrl = 'http://10.145.124.75:100/api/';
-  // static const String publicServerUrl = 'http://10.145.124.75:100/';
+  static const String serverUrl = 'http://10.162.89.75:100/api/';
+  static const String publicServerUrl = 'http://10.162.89.75:100/';
   //LOCAL_LINUX
   // static const String serverUrl = 'http://localhost:100/api/';
   // static const String publicServerUrl = 'http://localhost:100/';
@@ -23,8 +23,8 @@ class AppConstants {
   // static const String serverUrl = 'http://10.0.2.2:100/api/';
   // static const String publicServerUrl = 'http://10.0.2.2:100/';
   //PROD
-  static const String serverUrl = 'https://carbeat.online/api/';
-  static const String publicServerUrl = 'https://carbeat.online/';
+  // static const String serverUrl = 'https://carbeat.online/api/';
+  // static const String publicServerUrl = 'https://carbeat.online/';
 
   static const myLocation = LatLng(47.844637, 11.147302);
 

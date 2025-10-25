@@ -11,6 +11,7 @@ class Master {
   final String description;
   final double rating;
   final String mainPhoto;
+  final String mainThumbUrl;
   final int specialityId;
   final int tariffId;
   List<Service> services;
@@ -29,6 +30,7 @@ class Master {
     required this.tariffId,
     this.services = const [],
     required this.available,
+    required this.mainThumbUrl,
   });
 
   // Створення об'єкта Master з JSON
@@ -47,6 +49,7 @@ class Master {
       location: LatLng(lat, lng),
       description: json['description'],
       mainPhoto: json['main_photo']??'',
+      mainThumbUrl: json['main_thumb_url']??'',
       specialityId: json['main_service_id']??0,
       rating: double.parse((json['rating']??0).toString()),
       tariffId: json['tariff_id']??1,
@@ -70,6 +73,7 @@ class Master {
       'description': description,
       'rating': rating,
       'photo': mainPhoto,
+      'main_thumb_url': mainThumbUrl,
       'speciality_id': specialityId,
       'tariff_id': tariffId,
       'services': services,

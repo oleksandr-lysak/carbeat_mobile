@@ -86,7 +86,7 @@ class MasterCreationPageState extends State<MasterCreationPage> {
 
     return Stack(children: [
       Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Styles().primaryColor,
         body: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Form(
@@ -98,14 +98,15 @@ class MasterCreationPageState extends State<MasterCreationPage> {
                     
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
                         decoration: BoxDecoration(
-                          color: Styles().backgroundFormColor,
+                          //color: Styles().backgroundFormColor,
                           borderRadius: BorderRadius.circular(Styles.borderRadius),
                         ),
                         child: Text(
                           _phoneController.text,
-                          style: const TextStyle(fontSize: 16, color: Colors.blueGrey),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 22, color: Styles().titleColor),
 
                         ),
                       ),
@@ -162,12 +163,12 @@ class MasterCreationPageState extends State<MasterCreationPage> {
         bottom: MediaQuery.of(context).size.height * 0.02,
         child: ElevatedButton(
           style: ButtonStyle(
-            backgroundColor: MaterialStateProperty.all(Styles().primaryColor),
-            shape: MaterialStateProperty.all(
-              RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30.0),
-              ),
-            ),
+            backgroundColor: MaterialStateProperty.all(Styles().checkColor),
+            // shape: MaterialStateProperty.all(
+            //   RoundedRectangleBorder(
+            //     borderRadius: BorderRadius.circular(30.0),
+            //   ),
+            // ),
           ),
           onPressed: () {
             Navigator.pushNamed(

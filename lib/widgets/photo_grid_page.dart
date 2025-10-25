@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:carbeat/services/log_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:image_picker/image_picker.dart';
@@ -17,6 +19,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
   final ImagePicker _picker = ImagePicker();
   List<AssetEntity> _photos = [];
   AssetEntity? _selectedPhoto;
+  bool _permissionGranted = true;
   late latlong.LatLng? _selectedLocation;
   late String? _phone;
   late String? _name;
@@ -30,22 +33,52 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
   }
 
   Future<void> _loadGalleryImages() async {
-    final PermissionState permitted =
-        await PhotoManager.requestPermissionExtend();
-    if (permitted.hasAccess) {
+    try {
+      // 1) Перевіряємо поточний стан
+      PermissionState state = await PhotoManager.getPermissionState(
+        requestOption: const PermissionRequestOption(),
+      );
+      if (!state.hasAccess) {
+        // 2) Запитуємо дозвіл
+        state = await PhotoManager.requestPermissionExtend(
+          requestOption: const PermissionRequestOption(),
+        );
+      }
+
+      // 3) Повторна перевірка після запиту (деякі пристрої повертають стан не одразу)
+      state = await PhotoManager.getPermissionState(
+        requestOption: const PermissionRequestOption(),
+      );
+      if (!state.hasAccess) {
+        setState(() {
+          _permissionGranted = false;
+          _photos = [];
+        });
+        return;
+      }
+
+      // Завантажуємо з усіх альбомів, а не лише "All", бо на деяких пристроях він може бути порожнім
       final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
         type: RequestType.image,
-        onlyAll: true,
+        onlyAll: false,
       );
-      final List<AssetEntity> photos = await albums.first.getAssetListPaged(
-        page: 0,
-        size: 50,
-      );
+
+      final List<AssetEntity> collected = [];
+      for (final album in albums) {
+        final items = await album.getAssetListPaged(page: 0, size: 50);
+        collected.addAll(items);
+        if (collected.length >= 50) break;
+      }
+
+      // Сортуємо за датою створення (новіші спочатку)
+      collected.sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
+
       setState(() {
-        _photos = photos;
+        _photos = collected.take(50).toList();
+        _permissionGranted = true;
       });
-    } else {
-      // Обробка випадку, коли немає дозволу на доступ до галереї
+    } catch (e) {
+      LogService.log('Error loading gallery images: $e');
     }
   }
 
@@ -110,7 +143,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
 
     return Stack(children: [
       Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Styles().primaryColor,
         appBar: AppBar
         (
           title: Text(
@@ -123,7 +156,8 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
         ),
         body: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: GridView.builder(
+          child: _permissionGranted && _photos.isNotEmpty
+              ? GridView.builder(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               crossAxisSpacing: 8.0,
@@ -162,13 +196,15 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
                         child: ClipRRect(
                           borderRadius:
                               BorderRadius.circular(Styles.borderRadius),
-                          child: FutureBuilder<File?>(
-                            future: photo.file,
+                          child: FutureBuilder<Uint8List?>(
+                            future: photo.thumbnailDataWithSize(const ThumbnailSize.square(300)),
                             builder: (context, snapshot) {
-                              final file = snapshot.data;
-                              if (file == null) return const SizedBox();
-                              return Image.file(
-                                file,
+                              final bytes = snapshot.data;
+                              if (bytes == null) {
+                                return const SizedBox();
+                              }
+                              return Image.memory(
+                                bytes,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
@@ -199,7 +235,42 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
                 );
               }
             },
-          ),
+          )
+              : Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.photo_library_outlined,
+                          size: 48, color: Styles().titleColor.withOpacity(0.7)),
+                      const SizedBox(height: 12),
+                      Text(
+                        _permissionGranted
+                            ? FlutterI18n.translate(context, 'gallery.no_photos')
+                            : FlutterI18n.translate(context, 'gallery.permission_needed'),
+                        style: TextStyle(color: Styles().titleColor),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () async {
+                              await PhotoManager.openSetting();
+                            },
+                            child: Text(FlutterI18n.translate(context, 'gallery.open_settings')),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: _loadGalleryImages,
+                            style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor),
+                            child: Text(FlutterI18n.translate(context, 'gallery.retry'), style: TextStyle(color: Styles().titleColor)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ),
       Positioned(
@@ -208,7 +279,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
         bottom: MediaQuery.of(context).size.height * 0.02,
         child: ElevatedButton(
           style: ButtonStyle(
-            backgroundColor: MaterialStateProperty.all(Styles().primaryColor),
+            backgroundColor: MaterialStateProperty.all(Styles().checkColor),
             shape: MaterialStateProperty.all(
               RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(30.0),

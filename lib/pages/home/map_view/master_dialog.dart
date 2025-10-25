@@ -4,6 +4,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 
 import '../../../services/api_services/auth_service.dart';
 import '../../../widgets/animated_text_field.dart';
+import '../../../constants/styles.dart';
 import '../../../services/user_service.dart';
 import '../../../models/user.dart';
 import '../../../utils/phone_validator.dart';
@@ -17,14 +18,30 @@ Future<void> showMasterDialog(BuildContext context, {VoidCallback? onAuthorized,
     useRootNavigator: true,
     builder: (BuildContext ctx) {
       return AlertDialog(
-        title: Text(
-          FlutterI18n.translate(ctx, 'map_view.master_dialog.input_phone'),
-          style: Theme.of(ctx).textTheme.titleMedium,
+        backgroundColor: Styles().primaryColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        title: Row(
+          children: [
+            Icon(Icons.phone_android, color: Styles().titleColor),
+            const SizedBox(width: 8),
+            Text(
+              FlutterI18n.translate(ctx, 'map_view.master_dialog.input_phone'),
+              style: TextStyle(
+                color: Styles().titleColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
         content: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               AnimatedTextField(
                 keyboardType: TextInputType.phone,
@@ -44,22 +61,43 @@ Future<void> showMasterDialog(BuildContext context, {VoidCallback? onAuthorized,
           ),
         ),
         actions: [
-          TextButton(
-            child: Text(FlutterI18n.translate(ctx, 'common.cancel')),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          TextButton(
-            child: Text(FlutterI18n.translate(ctx, 'common.submit')),
-            onPressed: () async {
-              if (!_formKey.currentState!.validate()) return;
-              final phone = phoneController.text.trim();
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Styles().backgroundFormColor.withOpacity(0.6)),
+                    foregroundColor: Styles().titleColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(FlutterI18n.translate(ctx, 'common.cancel')),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Styles().checkColor,
+                    foregroundColor: Styles().titleColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () async {
+                    if (!_formKey.currentState!.validate()) return;
+                    final phone = phoneController.text.trim();
 
-              final needsRegistration = await AuthService().sendSms(phone);
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx); // close phone dialog
+                    final needsRegistration = await AuthService().sendSms(phone);
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx); // close phone dialog
 
-              _showOtpDialog(ctx, phone, needsRegistration, onAuthorized, onStartRegistration);
-            },
+                    _showOtpDialog(ctx, phone, needsRegistration, onAuthorized, onStartRegistration);
+                  },
+                  child: Text(FlutterI18n.translate(ctx, 'common.submit')),
+                ),
+              ),
+            ],
           ),
         ],
       );
@@ -77,12 +115,28 @@ Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegist
       return StatefulBuilder(
         builder: (ctx, setState) {
           return AlertDialog(
-            title: Text(
-              FlutterI18n.translate(ctx, 'map_view.master_dialog.input_otp'),
-              style: Theme.of(ctx).textTheme.titleMedium,
+            backgroundColor: Styles().primaryColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            title: Row(
+              children: [
+                Icon(Icons.lock_open_rounded, color: Styles().titleColor),
+                const SizedBox(width: 8),
+                Text(
+                  FlutterI18n.translate(ctx, 'map_view.master_dialog.input_otp'),
+                  style: TextStyle(
+                    color: Styles().titleColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 AnimatedTextField(
                   keyboardType: TextInputType.number,
@@ -101,44 +155,70 @@ Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegist
               ],
             ),
             actions: [
-              TextButton(
-                child: Text(FlutterI18n.translate(ctx, 'common.cancel')),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-              TextButton(
-                child: Text(FlutterI18n.translate(ctx, 'common.submit')),
-                onPressed: () async {
-                  final success = await AuthService()
-                      .confirmLogin(phone, int.parse(codeController.text), ctx);
-                  if (!success) {
-                    setState(() {
-                      error = FlutterI18n.translate(ctx, 'invalid_code');
-                    });
-                    return;
-                  }
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Styles().backgroundFormColor.withOpacity(0.6)),
+                        foregroundColor: Styles().titleColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(FlutterI18n.translate(ctx, 'common.cancel')),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Styles().checkColor,
+                        foregroundColor: Styles().titleColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () async {
+                        final code = codeController.text.trim();
+                        if (code.isEmpty) {
+                          setState(() { error = FlutterI18n.translate(ctx, 'required'); });
+                          return;
+                        }
+                        final success = await AuthService()
+                            .confirmLogin(phone, int.parse(code), ctx);
+                        if (!success) {
+                          setState(() {
+                            error = FlutterI18n.translate(ctx, 'invalid_code');
+                          });
+                          return;
+                        }
 
-                  if (needsRegistration) {
-                    Navigator.pop(ctx);
-                    if (onStartRegistration != null) {
-                      onStartRegistration(phone);
-                    } else {
-                    Navigator.pushReplacementNamed(
-                      ctx,
-                      '/map-picker',
-                      arguments: {'phone': phone},
-                    );
-                    }
-                  } else {
-                    User? user = await UserService().getUser();
-                    if (user != null && ctx.mounted) {
-                      Navigator.pop(ctx);
+                        if (needsRegistration) {
+                          Navigator.pop(ctx);
+                          if (onStartRegistration != null) {
+                            onStartRegistration(phone);
+                          } else {
+                            Navigator.pushReplacementNamed(
+                              ctx,
+                              '/map-picker',
+                              arguments: {'phone': phone},
+                            );
+                          }
+                        } else {
+                          User? user = await UserService().getUser();
+                          if (user != null && ctx.mounted) {
+                            Navigator.pop(ctx);
 
-                      if (onAuthorized != null) {
-                        onAuthorized();
-                      }
-                    }
-                  }
-                },
+                            if (onAuthorized != null) {
+                              onAuthorized();
+                            }
+                          }
+                        }
+                      },
+                      child: Text(FlutterI18n.translate(ctx, 'common.submit')),
+                    ),
+                  ),
+                ],
               ),
             ],
           );

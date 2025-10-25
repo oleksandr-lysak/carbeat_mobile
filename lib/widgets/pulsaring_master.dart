@@ -86,7 +86,7 @@ class PulsatingIconState extends State<PulsatingMaster>
     // Формуємо повний URL для фото (надійно з базовим URL)
     String photoUrl = '';
     if (widget.master.mainPhoto.isNotEmpty) {
-      final path = widget.master.mainPhoto;
+      final path = widget.master.mainThumbUrl;
       if (path.startsWith('http')) {
         photoUrl = path;
       } else {

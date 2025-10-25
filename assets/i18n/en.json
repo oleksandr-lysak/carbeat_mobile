@@ -69,6 +69,12 @@
       "input_otp": "Input code"
     }
   },
+  "gallery": {
+    "permission_needed": "Grant access to photos or select photos in settings",
+    "no_photos": "No accessible photos",
+    "open_settings": "Open settings",
+    "retry": "Retry"
+  },
   "system": {
     "filed_verify": "Failed to verify code. Please try again."
   },
