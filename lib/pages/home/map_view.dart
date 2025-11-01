@@ -1179,17 +1179,17 @@ class MapViewState extends State<MapView>
       if (res is Map) {
         if (res.containsKey('available')) {
           final val = res['available'];
-          if (val is bool)
+          if (val is bool) {
             serverAvailable = val;
-          else if (val is num)
+          } else if (val is num)
             serverAvailable = val != 0;
           else if (val is String)
             serverAvailable = val == '1' || val.toLowerCase() == 'true';
         } else if (res.containsKey('availability')) {
           final val = res['availability'];
-          if (val is bool)
+          if (val is bool) {
             serverAvailable = val;
-          else if (val is num)
+          } else if (val is num)
             serverAvailable = val != 0;
           else if (val is String)
             serverAvailable = val == '1' || val.toLowerCase() == 'true';
@@ -1198,17 +1198,17 @@ class MapViewState extends State<MapView>
           if (data is Map) {
             if (data.containsKey('available')) {
               final val = data['available'];
-              if (val is bool)
+              if (val is bool) {
                 serverAvailable = val;
-              else if (val is num)
+              } else if (val is num)
                 serverAvailable = val != 0;
               else if (val is String)
                 serverAvailable = val == '1' || val.toLowerCase() == 'true';
             } else if (data.containsKey('availability')) {
               final val = data['availability'];
-              if (val is bool)
+              if (val is bool) {
                 serverAvailable = val;
-              else if (val is num)
+              } else if (val is num)
                 serverAvailable = val != 0;
               else if (val is String)
                 serverAvailable = val == '1' || val.toLowerCase() == 'true';
@@ -1244,12 +1244,13 @@ class MapViewState extends State<MapView>
           // Revert on failure
           if (mounted) setState(() => _isAvailable = prev);
           await _applyOwnAvailabilityLocally(prev);
-          if (mounted)
+          if (mounted) {
             AppToast.show(
               'Не вдалося змінити статус',
               background: Colors.red,
               duration: Duration(seconds: 5),
             );
+          }
         }
       } else {
         _showAvailabilitySheet();
@@ -1454,12 +1455,13 @@ class MapViewState extends State<MapView>
     final bool prev = _isAvailable;
     setState(() => _isAvailable = true);
     await _applyOwnAvailabilityLocally(true);
-    if (mounted)
+    if (mounted) {
       AppToast.show(
         'Ви стали вільним на $durationMinutes хв',
         background: Colors.green,
         duration: Duration(seconds: 5),
       );
+    }
     try {
       final api = ApiService(AppConstants.serverUrl);
       final now = DateTime.now().toIso8601String();
@@ -1474,12 +1476,13 @@ class MapViewState extends State<MapView>
       // Revert on failure
       if (mounted) setState(() => _isAvailable = prev);
       await _applyOwnAvailabilityLocally(prev);
-      if (mounted)
+      if (mounted) {
         AppToast.show(
           'Не вдалося встановити доступність',
           background: Colors.red,
           duration: Duration(seconds: 5),
         );
+      }
     }
   }
 
@@ -1648,9 +1651,13 @@ class MapViewState extends State<MapView>
       if (masterId == null) return;
       final dynamic availRaw = data['available'] ?? data['status'] ?? data['is_available'];
       bool? available;
-      if (availRaw is bool) available = availRaw;
-      else if (availRaw is num) available = availRaw != 0;
-      else if (availRaw is String) available = availRaw == '1' || availRaw.toLowerCase() == 'true';
+      if (availRaw is bool) {
+        available = availRaw;
+      } else if (availRaw is num) {
+        available = availRaw != 0;
+      } else if (availRaw is String) {
+        available = availRaw == '1' || availRaw.toLowerCase() == 'true';
+      }
       if (available == null) return;
 
       bool changed = false;
@@ -1672,7 +1679,7 @@ class MapViewState extends State<MapView>
   Future<void> _applyOwnAvailabilityLocally(bool available) async {
     final user = await UserService().getUser();
     if (user?.master == null) return;
-    final int myId = user!.master!.id!;
+    final int myId = user!.master!.id;
     bool changed = false;
     for (int i = 0; i < mapMasters.length; i++) {
       if (mapMasters[i].id == myId && mapMasters[i].available != available) {
