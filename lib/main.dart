@@ -14,10 +14,9 @@ import 'package:carbeat/pages/create_master/master_creation_page.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:carbeat/pages/home/map_view.dart';
 import 'package:carbeat/providers/language_provider.dart';
-import 'package:carbeat/providers/notification_provider.dart';
 import 'package:carbeat/providers/service_provider.dart';
 import 'package:carbeat/providers/theme_provider.dart';
-import 'package:carbeat/services/fcm_service.dart';
+// FCM removed
 import 'package:carbeat/services/analytics_service.dart';
 import 'package:carbeat/services/dynamic_links_service.dart';
 import 'package:carbeat/services/language_service.dart';
@@ -108,7 +107,7 @@ void main() async {
                       ? Locale(savedLanguage)
                       : WidgetsBinding.instance.window.platformDispatcher.locale,
                 ),),
-        ChangeNotifierProvider(create: (_) => NotificationsProvider()),
+        // NotificationsProvider removed (FCM removed)
       ],
       child: MyApp(savedLanguage: savedLanguage, token: token),
     ),
@@ -172,7 +171,6 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      FCMService.initializeFCM(context: context);
       DynamicLinksService.handleInitialAndListen(context);
       AnalyticsService.logAppOpen();
       UpdateService.checkForUpdates(context);

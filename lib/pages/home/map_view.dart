@@ -8,7 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:carbeat/constants/app_constants.dart';
 import 'package:carbeat/constants/styles.dart';
 import 'package:carbeat/pages/home/map_view/master_dialog.dart';
-import 'package:carbeat/services/fcm_service.dart';
+// FCM removed
 import 'package:carbeat/widgets/loading.dart';
 import 'package:carbeat/widgets/map_card.dart';
 import 'package:carbeat/services/location_service.dart';
@@ -35,7 +35,7 @@ import 'package:carbeat/services/api_services/api_service.dart';
 import 'package:carbeat/widgets/app_toast.dart';
 import 'package:carbeat/widgets/master_details_sheet.dart';
 import 'package:carbeat/widgets/master_expandable_sheet.dart';
-import 'package:carbeat/providers/notification_provider.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class MapView extends StatefulWidget {
   const MapView({super.key});
@@ -72,8 +72,7 @@ class MapViewState extends State<MapView>
   bool? selectedAvailable;
   String? selectedSort;
 
-  Timer? _refreshTimer;
-  static const Duration refreshInterval = Duration(seconds: 15);
+  // Periodic refresh removed (replaced by Socket.IO realtime)
 
   // Debounce for map events
   Timer? _mapEventDebounce;
@@ -104,8 +103,9 @@ class MapViewState extends State<MapView>
   // Cache to reuse lightweight marker widgets
   final Map<int, Widget> _lightMarkerCache = {};
   // Notifications tracking
-  VoidCallback? _notificationsListener;
-  int _lastNotificationCount = 0;
+  // Realtime via Socket.IO
+  IO.Socket? _socket;
+  bool _socketConnected = false;
 
   // Masters that should currently be shown on the map after applying zoom-based
   // filtering rules.
@@ -145,17 +145,31 @@ class MapViewState extends State<MapView>
       });
     });
 
-    // Subscribe to push notifications to instantly reflect availability changes
+    // Connect to Socket.IO for realtime availability updates
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final notifications = Provider.of<NotificationsProvider>(context, listen: false);
-      _notificationsListener = () {
-        final list = notifications.notifications;
-        for (int i = _lastNotificationCount; i < list.length; i++) {
-          _handleNotification(list[i]);
-        }
-        _lastNotificationCount = list.length;
-      };
-      notifications.addListener(_notificationsListener!);
+      try {
+        _socket = IO.io(
+          AppConstants.publicServerUrl,
+          IO.OptionBuilder()
+              .setTransports(['websocket', 'polling'])
+              .setPath('/socket.io/')
+              .disableAutoConnect()
+              .build(),
+        );
+        _socket!.on('connect', (_) {
+          _socketConnected = true;
+        });
+        _socket!.on('disconnect', (_) {
+          _socketConnected = false;
+        });
+        _socket!.on('availability:update', (data) {
+          if (data is Map) {
+            final mapped = data.map((k, v) => MapEntry(k.toString(), v));
+            _handleNotification(mapped.cast<String, dynamic>());
+          }
+        });
+        _socket!.connect();
+      } catch (_) {}
     });
   }
 
@@ -167,7 +181,7 @@ class MapViewState extends State<MapView>
       routeObserver.subscribe(this, route);
       _isRouteSubscribed = true;
       _isRouteVisible = true;
-      _startRefreshTimer();
+      // periodic refresh removed
     }
   }
 
@@ -175,7 +189,7 @@ class MapViewState extends State<MapView>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (_isRouteVisible) {
-        _startRefreshTimer();
+        // periodic refresh removed
       }
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
@@ -187,25 +201,25 @@ class MapViewState extends State<MapView>
   @override
   void didPush() {
     _isRouteVisible = true;
-    _startRefreshTimer();
+    // periodic refresh removed
   }
 
   @override
   void didPopNext() {
     _isRouteVisible = true;
-    _startRefreshTimer();
+    // periodic refresh removed
   }
 
   @override
   void didPushNext() {
     _isRouteVisible = false;
-    _stopRefreshTimer();
+    // periodic refresh removed
   }
 
   @override
   void didPop() {
     _isRouteVisible = false;
-    _stopRefreshTimer();
+    // periodic refresh removed
   }
 
   Future<void> _initLocationAndLoadData() async {
@@ -219,11 +233,7 @@ class MapViewState extends State<MapView>
         }
       }
 
-      // Request notifications permission AFTER location permission is handled
-      // to avoid blocking the initial location flow on first launch
-      try {
-        await FCMService.requestNotificationPermission();
-      } catch (_) {}
+      // Notifications permission (FCM) removed
 
       // Try to get location with timeout
       LatLng? location;
@@ -271,14 +281,12 @@ class MapViewState extends State<MapView>
 
     String serverUrl = AppConstants.serverUrl;
     final String locale = await LanguageService.getLanguage() ?? 'en';
-    final fcmToken = await FCMService.getToken();
     Map<String, dynamic> params = {
       'lng': longitude,
       'lat': latitude,
       'zoom': zoom,
       'page': page,
       'locale': locale,
-      'fcm_token': fcmToken,
     };
     if (filterName != null && filterName!.isNotEmpty) {
       params['name'] = filterName;
@@ -1061,21 +1069,14 @@ class MapViewState extends State<MapView>
     _animationController.dispose();
     _mapSub.cancel();
     pageController.dispose();
+    try {
+      _socket?.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
-  void _startRefreshTimer() {
-    _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(
-      refreshInterval,
-      (_) => _softRefreshMasters(),
-    );
-  }
-
-  void _stopRefreshTimer() {
-    _refreshTimer?.cancel();
-    _refreshTimer = null;
-  }
+  void _startRefreshTimer() {}
+  void _stopRefreshTimer() {}
 
   Future<void> _softRefreshMasters() async {
     if (currentLocation == null || !mapWasLoaded) return;
@@ -1639,7 +1640,8 @@ class MapViewState extends State<MapView>
   void _handleNotification(Map<String, dynamic> data) {
     try {
       final type = (data['type'] ?? data['event'] ?? '').toString().toLowerCase();
-      if (type.isEmpty || (!type.contains('avail'))) return;
+      // Accept events without a type if they contain availability payload
+      if (type.isNotEmpty && !type.contains('avail')) return;
       final dynamic idRaw = data['master_id'] ?? data['id'] ?? data['master'];
       if (idRaw == null) return;
       final int? masterId = int.tryParse(idRaw.toString());
