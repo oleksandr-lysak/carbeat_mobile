@@ -65,8 +65,8 @@
       "phone": "Телефон",
       "get_sms_code": "Отримати СМС код",
       "code": "Код",
-      "input_sms_code": "Введіть код",
-      "input_otp": "Введіть код"
+      "input_sms_code": "Введіть код з СМС",
+      "input_otp": "Введіть код з СМС"
     }
   },
   "gallery": {

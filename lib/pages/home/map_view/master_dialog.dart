@@ -46,7 +46,7 @@ Future<void> showMasterDialog(BuildContext context, {VoidCallback? onAuthorized,
               AnimatedTextField(
                 keyboardType: TextInputType.phone,
                 controller: phoneController,
-                labelText: FlutterI18n.translate(ctx, 'map_view.master_dialog.input_phone'),
+                labelText: '+380XXXXXXXXX',
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return FlutterI18n.translate(ctx, 'required');

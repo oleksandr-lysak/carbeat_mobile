@@ -65,7 +65,7 @@
       "phone": "Phone",
       "get_sms_code": "Get SMS code",
       "code": "Code",
-      "input_sms_code": "Input code",
+      "input_sms_code": "Input code from sms",
       "input_otp": "Input code"
     }
   },

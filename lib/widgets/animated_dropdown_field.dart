@@ -56,13 +56,12 @@ class AnimatedDropdownFieldState extends State<AnimatedDropdownField> {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 18.0),
         decoration: BoxDecoration(
-          color: Styles().backgroundFormColor,
+          color: Styles().primaryColor,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: _isFocused
-                ? Styles().primaryColor
-                : Styles().primaryColor.withOpacity(0.3),
-            width: _isFocused ? 2 : 1,
+            color:
+                Styles().titleColor.withOpacity(0.5),
+            width: 0.7,
           ),
         ),
         child: DropdownButtonFormField<DropdownItem>(
@@ -74,6 +73,7 @@ class AnimatedDropdownFieldState extends State<AnimatedDropdownField> {
           ),
           value: widget.selectedItem,
           decoration: InputDecoration(
+            fillColor: Styles().primaryColor,
             labelText: widget.labelText,
             labelStyle: TextStyle(
               color: Styles().primaryColor.withOpacity(0.5),
@@ -103,7 +103,7 @@ class AnimatedDropdownFieldState extends State<AnimatedDropdownField> {
                     child: Text(
                       item.name,
                       style: TextStyle(
-                        color: Styles().primaryColor,
+                        color: Styles().titleColor,
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
@@ -118,7 +118,7 @@ class AnimatedDropdownFieldState extends State<AnimatedDropdownField> {
               widget.onChanged!(value);
             }
           },
-          dropdownColor: Styles().backgroundFormColor,
+          dropdownColor: Styles().primaryColor,
           itemHeight: 48.0, // Висота кожного елемента меню
         ),
       ),

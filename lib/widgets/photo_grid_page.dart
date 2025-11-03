@@ -15,24 +15,42 @@ class PhotoGridPage extends StatefulWidget {
   State<PhotoGridPage> createState() => _PhotoGridPageState();
 }
 
-class _PhotoGridPageState extends State<PhotoGridPage> {
+class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserver {
   final ImagePicker _picker = ImagePicker();
   List<AssetEntity> _photos = [];
-  AssetEntity? _selectedPhoto;
+  String? _selectedPhotoId;
   bool _permissionGranted = true;
   late latlong.LatLng? _selectedLocation;
   late String? _phone;
   late String? _name;
   late String? _description;
   late int? _specialtyId;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadGalleryImages();
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // After permission dialogs or returning from Settings, refresh gallery
+      _loadGalleryImages();
+    }
+  }
+
   Future<void> _loadGalleryImages() async {
+    if (_isLoading) return;
+    _isLoading = true;
     try {
       // 1) Перевіряємо поточний стан
       PermissionState state = await PhotoManager.getPermissionState(
@@ -54,23 +72,37 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
           _permissionGranted = false;
           _photos = [];
         });
+        _isLoading = false;
         return;
       }
 
-      // Завантажуємо з усіх альбомів, а не лише "All", бо на деяких пристроях він може бути порожнім
-      final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+      // Спробувати єдиний альбом "All" без дублікатів; fallback на всі альбоми з дедупом
+      final List<AssetPathEntity> allAlbumList = await PhotoManager.getAssetPathList(
         type: RequestType.image,
-        onlyAll: false,
+        onlyAll: true,
       );
 
-      final List<AssetEntity> collected = [];
-      for (final album in albums) {
-        final items = await album.getAssetListPaged(page: 0, size: 50);
-        collected.addAll(items);
-        if (collected.length >= 50) break;
+      List<AssetEntity> collected = [];
+      if (allAlbumList.isNotEmpty) {
+        collected = await allAlbumList.first.getAssetListPaged(page: 0, size: 100);
+      } else {
+        final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+          type: RequestType.image,
+          onlyAll: false,
+        );
+        final Map<String, AssetEntity> byId = {};
+        for (final album in albums) {
+          final items = await album.getAssetListPaged(page: 0, size: 100);
+          for (final it in items) {
+            if (!byId.containsKey(it.id)) {
+              byId[it.id] = it;
+              if (byId.length >= 100) break;
+            }
+          }
+          if (byId.length >= 100) break;
+        }
+        collected = byId.values.toList();
       }
-
-      // Сортуємо за датою створення (новіші спочатку)
       collected.sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
 
       setState(() {
@@ -79,6 +111,8 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
       });
     } catch (e) {
       LogService.log('Error loading gallery images: $e');
+    } finally {
+      _isLoading = false;
     }
   }
 
@@ -89,7 +123,10 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
       final asset = await _saveImageToGallery(file);
       if (asset != null) {
         setState(() {
+          // Remove duplicates of the same asset id, then insert newest at top
+          _photos.removeWhere((p) => p.id == asset.id);
           _photos.insert(0, asset);
+          _selectedPhotoId = asset.id;
         });
       }
     }
@@ -116,11 +153,10 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
 
   void _onPhotoTapped(AssetEntity photo) {
     setState(() {
-      if (_selectedPhoto == photo) {
-        _selectedPhoto =
-            null;
+      if (_selectedPhotoId == photo.id) {
+        _selectedPhotoId = null;
       } else {
-        _selectedPhoto = photo;
+        _selectedPhotoId = photo.id;
       }
     });
   }
@@ -181,7 +217,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
                 );
               } else {
                 final photo = _photos[index - 1];
-                final bool isSelected = _selectedPhoto == photo;
+                final bool isSelected = _selectedPhotoId == photo.id;
                 return GestureDetector(
                   onTap: () => _onPhotoTapped(photo),
                   child: Stack(
@@ -287,7 +323,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
             ),
           ),
           onPressed: () {
-            if (_selectedPhoto == null) return;
+            if (_selectedPhotoId == null) return;
             Navigator.pushNamed(
               context,
               '/summary-info',
@@ -297,7 +333,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> {
                 _name,
                 _description,
                 _specialtyId,
-                _selectedPhoto?.id,
+                _selectedPhotoId,
               ],
             );
           },

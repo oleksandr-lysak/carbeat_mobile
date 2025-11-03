@@ -395,7 +395,8 @@ class MapViewState extends State<MapView>
   void _createMarkers() {
     masters = [];
     final Set<int> seenMasterIds = {};
-
+    final List<GarageMarker> availableMarkers = [];
+    final List<GarageMarker> unavailableMarkers = [];
     GarageMarker? selectedMarker;
     for (int i = 0; i < visibleMasters.length; i++) {
       final master = visibleMasters[i];
@@ -445,13 +446,16 @@ class MapViewState extends State<MapView>
 
       if (isActive) {
         selectedMarker = marker;
+      } else if (master.available) {
+        availableMarkers.add(marker);
       } else {
-        masters.add(marker);
+        unavailableMarkers.add(marker);
       }
     }
-    if (selectedMarker != null) {
-      masters.add(selectedMarker!);
-    }
+    // Draw order: unavailable first, then available, then selected on very top
+    masters.addAll(unavailableMarkers);
+    masters.addAll(availableMarkers);
+    if (selectedMarker != null) masters.add(selectedMarker!);
   }
 
   int _countMastersInViewport() {
@@ -1640,7 +1644,7 @@ class MapViewState extends State<MapView>
     );
   }
 
-  void _handleNotification(Map<String, dynamic> data) {
+  Future<void> _handleNotification(Map<String, dynamic> data) async {
     try {
       final type = (data['type'] ?? data['event'] ?? '').toString().toLowerCase();
       // Accept events without a type if they contain availability payload
@@ -1668,6 +1672,17 @@ class MapViewState extends State<MapView>
           break;
         }
       }
+      // If this is my master – mirror the toggle button state
+      try {
+        final user = await UserService().getUser();
+        final int? myMasterId = user?.master?.id;
+        if (myMasterId != null && myMasterId == masterId) {
+          if (_isAvailable != available) {
+            if (mounted) setState(() => _isAvailable = available!);
+          }
+        }
+      } catch (_) {}
+
       if (changed) {
         _lightMarkerCache.remove(masterId * 10 + 1);
         _lightMarkerCache.remove(masterId * 10 + 0);

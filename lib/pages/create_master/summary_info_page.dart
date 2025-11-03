@@ -145,7 +145,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
           body: FadeTransition(
             opacity: _fadeAnimation,
             child: Container(
-              color: Colors.white,
+              color: Styles().primaryColor,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: _buildContent(),
@@ -153,12 +153,12 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
             ),
           ),
           bottomNavigationBar: Container(
-            color: Colors.white,
+            color: Styles().primaryColor,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: ElevatedButton(
                 style: ButtonStyle(
-                  backgroundColor: MaterialStateProperty.all(Styles().primaryColor),
+                  backgroundColor: MaterialStateProperty.all(Styles().checkColor),
                   shape: MaterialStateProperty.all(
                     RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30.0),
@@ -227,19 +227,19 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
         children: [
           Text(
             '$title:',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
-              color: Styles.backgroundColor,
+              color: Styles().titleColor,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.normal,
-              color: Styles.textInputColor,
+              color: Styles().titleColor,
             ),
           ),
         ],
@@ -256,9 +256,9 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
         children: [
           Text(
             FlutterI18n.translate(context, 'summary_info_page.photo'),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
-              color: Styles.descriptionColor,
+              color: Styles().titleColor,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -267,7 +267,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
             height: 100,
             width: 100,
             decoration: BoxDecoration(
-              color: Styles.textInputColor,
+              color: Styles().titleColor,
               borderRadius: BorderRadius.circular(Styles.borderRadius),
               boxShadow: [
                 BoxShadow(
