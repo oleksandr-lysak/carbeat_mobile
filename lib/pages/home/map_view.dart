@@ -1361,11 +1361,11 @@ class MapViewState extends State<MapView>
                       ElevatedButton.icon(
                         icon: const Icon(Icons.add, color: Colors.white, size: 18),
                         label: Text(
-                          '+30 хв',
+                          '30 хв',
                           style: TextStyle(color: Styles().titleColor),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Styles().primaryColor,
+                          backgroundColor: Styles().checkColor,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -1380,11 +1380,11 @@ class MapViewState extends State<MapView>
                       ElevatedButton.icon(
                         icon: const Icon(Icons.remove, color: Colors.white, size: 18),
                         label: Text(
-                          '-30 хв',
+                          '30 хв',
                           style: TextStyle(color: Styles().titleColor),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Styles().primaryColor,
+                          backgroundColor: Styles().checkColor,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -1424,7 +1424,7 @@ class MapViewState extends State<MapView>
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.timer, color: Colors.white),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Styles().primaryColor,
+                        backgroundColor: Styles().checkColor,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
