@@ -149,7 +149,7 @@ class MapViewState extends State<MapView>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         _socket = IO.io(
-          AppConstants.publicServerUrl,
+          AppConstants.socketBaseUrl,
           IO.OptionBuilder()
               .setTransports(['websocket', 'polling'])
               .setPath('/socket.io/')

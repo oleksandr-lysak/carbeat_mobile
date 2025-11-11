@@ -48,7 +48,17 @@ void main() async {
     if (kReleaseMode) {
       FirebaseCrashlytics.instance.recordFlutterFatalError(details);
     }
-    LogService.log(details.toString());
+    // Send richer diagnostics to Telegram
+    try {
+      final exceptionStr = details.exceptionAsString();
+      final stackStr = details.stack?.toString() ?? '';
+      LogService.log('FlutterError: $exceptionStr');
+      if (stackStr.isNotEmpty) {
+        LogService.log(stackStr);
+      }
+    } catch (_) {
+      LogService.log(details.toString());
+    }
   };
 
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {

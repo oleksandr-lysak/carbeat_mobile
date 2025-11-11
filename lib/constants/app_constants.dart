@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:loggme/loggme.dart';
 
@@ -17,15 +17,19 @@ class AppConstants {
   // LOCAL endpoints (used in debug/profile by default)
   static const String _localServerUrl = 'http://10.0.2.2:100/api/';
   static const String _localPublicServerUrl = 'http://10.0.2.2:100/';
+  static const String _localSocketUrl = 'http://10.0.2.2:100/';
   // PROD endpoints (used in release)
   static const String _prodServerUrl = 'https://carbeat.online/api/';
-  // Use dedicated socket subdomain for realtime
-  static const String _prodPublicServerUrl = 'https://socket.carbeat.online/';
+  static const String _prodPublicServerUrl = 'https://carbeat.online/';
+  // Socket uses dedicated subdomain in prod
+  static const String _prodSocketUrl = 'https://socket.carbeat.online/';
 
   // Select endpoints based on build mode
   static String get serverUrl => kReleaseMode ? _prodServerUrl : _localServerUrl;
   static String get publicServerUrl =>
       kReleaseMode ? _prodPublicServerUrl : _localPublicServerUrl;
+  static String get socketBaseUrl =>
+      kReleaseMode ? _prodSocketUrl : _localSocketUrl;
 
   static const myLocation = LatLng(47.844637, 11.147302);
 
