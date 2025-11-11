@@ -190,7 +190,7 @@ class _MasterExpandableSheetState extends State<MasterExpandableSheet> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  item.name.length > 20 ? '${item.name.substring(0, 22)}...' : item.name,
+                  item.name.length > 22 ? '${item.name.substring(0, 22)}...' : item.name,
                   style: TextStyle(fontSize: 22, color: Styles().titleColor, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
