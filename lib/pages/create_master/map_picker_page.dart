@@ -27,22 +27,36 @@ class MapPickerPageState extends State<MapPickerPage> {
 
   Future<void> _getCurrentLocation() async {
     await _requestPermission();
-    Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
-    setState(() {
-      _currentLocation = LatLng(position.latitude, position.longitude);
-      _mapController.move(_currentLocation!, 18); // Оновити позицію мапи
-      _selectedLocation =
-          _currentLocation; // Встановити початкове місце маркера
-    });
+    try {
+      // 1) Швидкий старт з останньої відомої позиції (може бути null)
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        _currentLocation = LatLng(last.latitude, last.longitude);
+        _mapController.move(_currentLocation!, 18);
+        _selectedLocation = _currentLocation;
+        setState(() {});
+      }
+      // 2) Точна поточна позиція з таймаутом
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(const Duration(seconds: 8));
+      if (!mounted) return;
+      setState(() {
+        _currentLocation = LatLng(pos.latitude, pos.longitude);
+        _mapController.move(_currentLocation!, 18);
+        _selectedLocation = _currentLocation;
+      });
+    } catch (_) {
+      // Ігноруємо – залишимо дефолтний центр; користувач може посунути карту вручну
+    }
   }
 
   Future<void> _requestPermission() async {
-    LocationPermission permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return;
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
+    // Якщо deniedForever – не блокуємо UI, просто не зрушуємо камеру
   }
 
   void _updateSelectedLocation() {
@@ -70,7 +84,7 @@ class MapPickerPageState extends State<MapPickerPage> {
             options: MapOptions(
               minZoom: 2,
               maxZoom: 18,
-              initialCenter: _currentLocation ?? const LatLng(37.7749, -122.4194),
+              initialCenter: _currentLocation ?? const LatLng(50.4501, 30.5234),
               initialZoom: 18,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate,

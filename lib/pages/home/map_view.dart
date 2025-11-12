@@ -173,6 +173,48 @@ class MapViewState extends State<MapView>
             _handleNotification(mapped.cast<String, dynamic>());
           }
         });
+        // New masters (created) should appear immediately
+        _socket!.on('master:created', (data) async {
+          try {
+            if (data is Map) {
+              final mapped = data.map((k, v) => MapEntry(k.toString(), v));
+              final json = mapped.cast<String, dynamic>();
+              // Avoid duplicates
+              final int? id = int.tryParse(json['id']?.toString() ?? '');
+              if (id != null && !mapMasters.any((m) => m.id == id)) {
+                final master = Master.fromJson(json);
+                setState(() {
+                  mapMasters.add(master);
+                  _updateVisibleMasters();
+                });
+              }
+            }
+          } catch (_) {}
+        });
+        // Optional: update existing markers on profile changes
+        _socket!.on('master:updated', (data) async {
+          try {
+            if (data is Map) {
+              final mapped = data.map((k, v) => MapEntry(k.toString(), v));
+              final json = mapped.cast<String, dynamic>();
+              final int? id = int.tryParse(json['id']?.toString() ?? '');
+              if (id == null) return;
+              final updated = Master.fromJson(json);
+              bool changed = false;
+              for (int i = 0; i < mapMasters.length; i++) {
+                if (mapMasters[i].id == id) {
+                  mapMasters[i] = updated;
+                  changed = true;
+                  break;
+                }
+              }
+              if (!changed) {
+                mapMasters.add(updated);
+              }
+              if (mounted) _updateVisibleMasters();
+            }
+          } catch (_) {}
+        });
         _socket!.connect();
       } catch (_) {}
     });
@@ -1162,12 +1204,18 @@ class MapViewState extends State<MapView>
     if (_isUpdatingMasterStatus) return;
     try {
       _isUpdatingMasterStatus = true;
+      final bool wasMaster = _isMaster;
       final user = await UserService().getUser();
       if (!mounted) return;
       setState(() {
         _isMaster = user?.master != null;
         _masterPhoto = user?.master?.mainPhoto;
       });
+      // If the user has just become a master, refresh markers and center on their marker
+      if (_isMaster && !wasMaster) {
+        await _softRefreshMasters();
+        _centerOnOwnMasterIfNeeded();
+      }
       await _refreshOwnAvailabilityFromServer();
     } finally {
       _isUpdatingMasterStatus = false;
@@ -1477,9 +1525,8 @@ class MapViewState extends State<MapView>
     }
     try {
       final api = ApiService(AppConstants.serverUrl);
-      final now = DateTime.now().toIso8601String();
+      // Let server use its own current time to avoid timezone skew issues
       await api.postRequest('masters/${user!.master!.id}/availability', {
-        'start_time': now,
         'duration': durationMinutes,
       });
       // Background reconcile
