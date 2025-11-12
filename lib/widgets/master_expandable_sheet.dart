@@ -347,7 +347,7 @@ class _MasterExpandableSheetState extends State<MasterExpandableSheet> {
 
   Widget _buildExpandedBody() {
     if (_loadingDetails && _full == null) {
-      return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+      return _buildSkeletonBody();
     }
     final data = _full;
     final services = (data?['services'] is List) ? (data?['services'] as List) : [];
@@ -398,6 +398,90 @@ class _MasterExpandableSheetState extends State<MasterExpandableSheet> {
             },
           ),
         const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildSkeletonBody() {
+    Widget line({double width = double.infinity, double height = 14, double radius = 8}) {
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: Styles().backgroundFormColor,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+      );
+    }
+
+    Widget chip() {
+      return Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Styles().backgroundFormColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: line(width: 120, height: 18),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(5, (_) => chip()),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: line(width: 100, height: 18),
+        ),
+        const SizedBox(height: 12),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: 3,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Styles().backgroundFormColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        line(width: 160, height: 14),
+                        const SizedBox(height: 8),
+                        line(width: double.infinity, height: 12),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }

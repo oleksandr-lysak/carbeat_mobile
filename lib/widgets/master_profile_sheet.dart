@@ -549,6 +549,14 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
     final picked = await picker.pickMultiImage(imageQuality: 100);
     if (picked.isEmpty) return;
 
+    // Immediately show uploading indicator to provide instant feedback
+    if (mounted) {
+      setState(() {
+        _uploading = true;
+        _uploadProgress = 0.0; // indeterminate while preparing images
+      });
+    }
+
     // Prepare base64 with prefix and chunk into max 10 per request
     List<String> payload = [];
     for (final x in picked) {
@@ -561,10 +569,6 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
 
     final api = ApiService(AppConstants.serverUrl);
     int sent = 0;
-    setState(() {
-      _uploading = true;
-      _uploadProgress = 0.0;
-    });
     while (sent < payload.length) {
       final chunk = payload.sublist(sent, (sent + 10) > payload.length ? payload.length : sent + 10);
       final res = await api.postRequest('masters/$_masterId/gallery', {
