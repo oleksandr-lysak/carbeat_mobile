@@ -2,20 +2,65 @@ import 'package:flutter/material.dart';
 import 'package:carbeat/classes/garage_marker.dart';
 import 'package:carbeat/constants/styles.dart';
 
-/// Circle icon for map clusters (stateless & lightweight).
-/// Shows number of markers inside and optional star overlay if any premium master exists.
-class ClusterCircle extends StatelessWidget {
+/// Circle icon for map clusters with optional bounce animation if any master is available.
+class ClusterCircle extends StatefulWidget {
   final List<GarageMarker> markers;
   const ClusterCircle({super.key, required this.markers});
+  
+  @override
+  State<ClusterCircle> createState() => _ClusterCircleState();
+}
+
+class _ClusterCircleState extends State<ClusterCircle> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _bounceAnimation;
 
   @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 260),
+      vsync: this,
+    );
+    _configureAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant ClusterCircle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _configureAnimation();
+  }
+
+  void _configureAnimation() {
+    final bool hasAvailable = widget.markers.any((m) => m.master.available);
+    _controller.stop();
+    if (hasAvailable) {
+      _bounceAnimation = Tween<double>(begin: 0.0, end: -8.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.bounceInOut),
+      );
+      _controller.repeat(reverse: true);
+    } else {
+      _bounceAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.linear),
+      );
+      _controller.reset();
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  
+  @override
   Widget build(BuildContext context) {
-    final int count = markers.length;
-    final bool hasPremium = markers.any((m) => m.master.tariffId == 2);
-
+    final int count = widget.markers.length;
+    final bool hasPremium = widget.markers.any((m) => m.master.tariffId == 2);
+  
     final Color baseGreen = Styles().primaryColor;
-
-    // Dynamically scale cluster size to ensure multi-digit labels fit (up to 5+ digits)
+  
     double size;
     if (count < 10) {
       size = 52;
@@ -24,11 +69,11 @@ class ClusterCircle extends StatelessWidget {
     } else if (count < 1000) {
       size = 72;
     } else if (count < 10000) {
-      size = 88; // 4 digits
+      size = 88;
     } else {
-      size = 104; // 5+ digits
+      size = 104;
     }
-
+  
     Widget base = Container(
       width: size,
       height: size,
@@ -41,19 +86,18 @@ class ClusterCircle extends StatelessWidget {
       ),
       child: const SizedBox.shrink(),
     );
-
+  
     base = Stack(
       alignment: Alignment.center,
       children: [
         base,
         Center(
-          // FittedBox ensures the text scales to fit the available circle size
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               '$count',
               style: const TextStyle(
-                fontSize: 28, // base; will be scaled down by FittedBox as needed
+                fontSize: 28,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
                 shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
@@ -63,14 +107,8 @@ class ClusterCircle extends StatelessWidget {
         ),
       ],
     );
-
+  
     if (hasPremium) {
-      base = Stack(
-        clipBehavior: Clip.none,
-        children: const [
-          // base will be inserted by parent Stack in build above
-        ],
-      );
       base = Stack(
         clipBehavior: Clip.none,
         children: [
@@ -88,6 +126,14 @@ class ClusterCircle extends StatelessWidget {
       );
     }
 
-    return base;
+    return AnimatedBuilder(
+      animation: _bounceAnimation,
+      builder: (context, _) {
+        return Transform.translate(
+          offset: Offset(0, _bounceAnimation.value),
+          child: base,
+        );
+      },
+    );
   }
 } 

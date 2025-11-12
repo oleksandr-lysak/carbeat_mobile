@@ -118,7 +118,10 @@ class _MapFilterDialogState extends State<MapFilterDialog> {
             AnimatedDropdownField(
               labelText: FlutterI18n.translate(context, 'map_view.filter_service'),
               items: widget.services
-                  .map((s) => DropdownItem(id: s.id, name: s.name))
+                  .map((s) => DropdownItem(
+                        id: s.id,
+                        name: s.mastersCount > 0 ? '${s.name} (${s.mastersCount})' : s.name,
+                      ))
                   .toList(),
               selectedItem: selectedService,
               onChanged: (item) {

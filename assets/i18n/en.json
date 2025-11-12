@@ -135,6 +135,7 @@
     "downloading": "Downloading update...",
     "restart_now": "Restart to install",
     "ready_to_install": "Update downloaded. Restart to finish.",
-    "open_play": "Open Play Store"
+    "open_play": "Open Play Store",
+    "open_appstore": "Open App Store"
   }
 }

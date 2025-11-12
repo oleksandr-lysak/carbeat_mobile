@@ -20,6 +20,7 @@ class ServiceProvider with ChangeNotifier {
 
     try {
       _services = await _service.fetchServices();
+      _services.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } catch (e) {
       _errorMessage = e.toString();
     } finally {

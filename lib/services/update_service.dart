@@ -10,12 +10,21 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'analytics_service.dart';
 import 'log_service.dart';
 import 'remote_config_service.dart';
+import 'package:carbeat/services/api_services/api_service.dart';
+import 'package:carbeat/constants/app_constants.dart';
 
 class UpdateService {
   static const String _lastFlexiblePromptKey = 'last_flexible_prompt_ms';
 
   static Future<void> checkForUpdates(BuildContext context) async {
-    if (!Platform.isAndroid) return; // In-app updates only on Android
+    // 1) Backend-enforced minimum version (Android + iOS)
+    final blocked = await _checkBackendAndBlockIfNeeded(context);
+    if (blocked) {
+      return;
+    }
+
+    // 2) Android in-app updates (Play Core). Skip on non-Android.
+    if (!Platform.isAndroid) return;
 
     try {
       await RemoteConfigService().initialize();
@@ -53,6 +62,72 @@ class UpdateService {
         await _markFlexiblePrompted();
       }
     }
+  }
+
+  static Future<bool> _checkBackendAndBlockIfNeeded(BuildContext context) async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final int currentBuild = int.tryParse(packageInfo.buildNumber) ?? 0;
+      final String platform = Platform.isIOS ? 'ios' : 'android';
+      final api = ApiService(AppConstants.serverUrl);
+      final res = await api.getRequest('app/version?platform=$platform&build=$currentBuild');
+      final Map<String, dynamic> data =
+          (res.containsKey('data') && res['data'] is Map<String, dynamic>)
+              ? (res['data'] as Map<String, dynamic>)
+              : res;
+      final int minSupported = (data['min_supported_build'] is num) ? (data['min_supported_build'] as num).toInt() : 1;
+      final String? storeUrl = (data['store_url'] as String?)?.trim();
+      final String? message = (data['message'] as String?)?.trim();
+
+      if (currentBuild < minSupported) {
+        await AnalyticsService.logEvent('update_block_backend', parameters: {
+          'platform': platform,
+          'current_build': currentBuild.toString(),
+          'min_supported': minSupported.toString(),
+        });
+        await _showBackendBlockingDialog(context, message, storeUrl);
+        return true;
+      }
+    } catch (err) {
+      // If backend check fails, proceed with normal flow
+      LogService.log('Backend version check failed: $err');
+    }
+    return false;
+  }
+
+  static Future<void> _showBackendBlockingDialog(BuildContext context, String? message, String? storeUrl) async {
+    final title = FlutterI18n.translate(context, 'update.title');
+    final body = message?.isNotEmpty == true
+        ? message!
+        : FlutterI18n.translate(context, 'update.body_critical');
+    final openStoreText = Platform.isIOS
+        ? FlutterI18n.translate(context, 'update.open_appstore')
+        : FlutterI18n.translate(context, 'update.open_play');
+
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                if (storeUrl != null && storeUrl.isNotEmpty) {
+                  await launchUrlString(storeUrl);
+                } else {
+                  await _openStore();
+                }
+                await AnalyticsService.logEvent('update_store_opened_backend');
+              },
+              child: Text(openStoreText),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   static Future<void> _runImmediateUpdate(BuildContext context) async {
