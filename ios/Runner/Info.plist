@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Нам потрібен доступ до ваших фото, щоб додати зображення профілю</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Нам потрібен доступ до камери, щоб зробити фото</string>
 </dict>
 </plist>

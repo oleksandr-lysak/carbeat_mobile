@@ -106,6 +106,7 @@ class MapViewState extends State<MapView>
   // Realtime via Socket.IO
   IO.Socket? _socket;
   bool _socketConnected = false;
+  bool _centeredOnOwnMaster = false;
 
   // Masters that should currently be shown on the map after applying zoom-based
   // filtering rules.
@@ -136,6 +137,10 @@ class MapViewState extends State<MapView>
     // Check whether the current user is a master so that we can optionally
     // display additional UI (e.g. the "Become available" button).
     _updateMasterStatus();
+    // Try to center on own master shortly after startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _centerOnOwnMasterIfNeeded();
+    });
 
     // Listen for map movements/zoom changes to update visible masters.
     _mapSub = MapViewState.mapController.mapEventStream.listen((event) {
@@ -208,6 +213,8 @@ class MapViewState extends State<MapView>
   void didPopNext() {
     _isRouteVisible = true;
     // periodic refresh removed
+    // Attempt to center on own master when returning to this route
+    _centerOnOwnMasterIfNeeded();
   }
 
   @override
@@ -369,6 +376,8 @@ class MapViewState extends State<MapView>
         loading = false;
       });
     }
+    // After initial data load, center on own master if applicable
+    _centerOnOwnMasterIfNeeded();
   }
 
   Future<void> _fetchMarkers(
@@ -1552,6 +1561,34 @@ class MapViewState extends State<MapView>
             )
             : AppConstants.publicServerUrl;
     return path.startsWith('/') ? '$base$path' : '$base/$path';
+  }
+
+  Future<void> _centerOnOwnMasterIfNeeded() async {
+    if (_centeredOnOwnMaster) return;
+    try {
+      final user = await UserService().getUser();
+      final myMaster = user?.master;
+      if (myMaster == null) return;
+      final target = myMaster.location;
+      if (_controllerReady()) {
+        AnimationService.animatedMapMove(
+          mapController,
+          _animationController,
+          target,
+          17,
+        );
+        // Select marker if present
+        final idx = visibleMasters.indexWhere((m) => m.id == myMaster.id);
+        if (idx != -1 && mounted) {
+          setState(() {
+            selectedIndex = idx;
+            _selectedMasterId = myMaster.id;
+            _createMarkers();
+          });
+        }
+        _centeredOnOwnMaster = true;
+      }
+    } catch (_) {}
   }
 
   Widget _buildMasterFabChild() {

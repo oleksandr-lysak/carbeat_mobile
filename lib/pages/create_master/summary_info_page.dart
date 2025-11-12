@@ -165,7 +165,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
                     ),
                   ),
                 ),
-                onPressed: _registerUser,
+                onPressed: isLoading ? null : _registerUser,
                 child: Text(
                   FlutterI18n.translate(context, 'summary_info_page.register_button'),
                   style: TextStyle(color: Styles().titleColor, fontSize: 24),
@@ -292,6 +292,37 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   }
 
   void _registerUser() async {
+    // Basic client-side validation to avoid silent errors
+    final code = _verificationCodeController.text.trim();
+    if (code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Введіть код з SMS')),
+      );
+      return;
+    }
+    if (_phone == null || _phone!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Немає телефону для реєстрації')),
+      );
+      return;
+    }
+    if (_selectedLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Оберіть локацію на мапі')),
+      );
+      return;
+    }
+    if (_serviceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Оберіть послугу')),
+      );
+      return;
+    }
+    if (isLoading) return;
+    setState(() {
+      isLoading = true;
+    });
+    try {
     // Ensure processed image
     if (_processedPhotoFile == null && _photoFile != null) {
       final bytes = await _photoFile!.readAsBytes();
@@ -311,33 +342,30 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
       photo = null;
     }
 
-    final int bytes = toSend != null ? await toSend.length() : 0;
-    final double sizeMb = bytes / (1024 * 1024);
+      final int bytes = toSend != null ? await toSend.length() : 0;
+      final double sizeMb = bytes / (1024 * 1024);
 
-    Map<String, dynamic> request = {
-      'sms_code': _verificationCodeController.text,
-      'phone': _phone,
-      'name': _name,
-      'description': _description,
-      'service_id': _serviceId,
-      'place_id': _placeId,
-      'address': _address,
-      'latitude': _selectedLocation!.latitude,
-      'longitude': _selectedLocation!.longitude,
-      'photo': photo,
-    };
-    setState(() {
-      isLoading = true;
-    });
-    await AuthService().register(request, context);
-    User? user = await UserService().getUser();
-    if (user != null) {
-      if (user.master != null) {
+      Map<String, dynamic> request = {
+        'sms_code': code,
+        'phone': _phone,
+        'name': _name,
+        'description': _description,
+        'service_id': _serviceId,
+        'place_id': _placeId,
+        'address': _address,
+        'latitude': _selectedLocation!.latitude,
+        'longitude': _selectedLocation!.longitude,
+        'photo': photo,
+      };
+
+      await AuthService().register(request, context);
+      User? user = await UserService().getUser();
+      if (user != null && user.master != null) {
         Master master = user.master!;
         int? masterId = master.id;
         String masterName = master.name;
+        if (!mounted) return;
         Navigator.popAndPushNamed(
-          // ignore: use_build_context_synchronously
           context,
           '/booking-page',
           arguments: {
@@ -346,14 +374,26 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
           },
         );
       }
-    }
 
-    // Close modal flow by navigating to '/home-page' inside inner Navigator.
-    Navigator.popAndPushNamed(
-      // ignore: use_build_context_synchronously
-      context,
-      '/home-page',
-    );
+      // Close modal flow by navigating to '/home-page' inside inner Navigator.
+      if (!mounted) return;
+      Navigator.popAndPushNamed(
+        context,
+        '/home-page',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Помилка реєстрації: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   String convertImageToBase64(File imageFile) {

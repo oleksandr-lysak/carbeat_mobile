@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:carbeat/constants/app_constants.dart';
 import 'package:carbeat/constants/styles.dart';
 import 'package:carbeat/models/user.dart';
@@ -496,6 +497,9 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   }
 
   Future<void> _pickAvatar() async {
+    // Для камери/галереї: запит дозволів дружньо
+    final ok = await _ensurePhotosPermission();
+    if (!ok) return;
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 100);
     if (picked == null) return;
@@ -539,6 +543,8 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   }
 
   Future<void> _addGalleryPhotos() async {
+    final ok = await _ensurePhotosPermission();
+    if (!ok) return;
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(imageQuality: 100);
     if (picked.isEmpty) return;
@@ -581,6 +587,86 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       });
       AppToast.show('Фото завантажено', background: Colors.green);
     }
+  }
+
+  Future<bool> _ensurePhotosPermission() async {
+    // iOS: Permission.photos; Android: читання медіа з галереї покриває сам ImagePicker,
+    // але просимо READ_MEDIA_IMAGES / storage через permission_handler для дружнього UX.
+    var status = await Permission.photos.status;
+    if (status.isGranted || status.isLimited) return true;
+    status = await Permission.photos.request();
+    if (status.isGranted || status.isLimited) return true;
+    await _showPermissionModal(
+      title: 'Немає доступу до фото',
+      message:
+          'Надайте доступ до ваших фото, щоб додати аватар і галерею.',
+    );
+    return false;
+  }
+
+  Future<void> _showPermissionModal({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Styles().primaryColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lock_outline, color: Styles().titleColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        color: Styles().titleColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await _ensurePhotosPermission();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Styles().checkColor,
+                    elevation: 0,
+                  ),
+                  child: Text('Надати доступ',
+                      style: TextStyle(color: Styles().titleColor)),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openAdditionalServicesDialog() async {

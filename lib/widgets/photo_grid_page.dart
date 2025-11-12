@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:latlong2/latlong.dart' as latlong;
 import 'package:carbeat/constants/styles.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class PhotoGridPage extends StatefulWidget {
   const PhotoGridPage({super.key});
@@ -52,26 +53,38 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
     if (_isLoading) return;
     _isLoading = true;
     try {
-      // 1) Перевіряємо поточний стан
-      PermissionState state = await PhotoManager.getPermissionState(
+      // Єдиний офіційний запит доступу до фото
+      final perm = await PhotoManager.requestPermissionExtend(
         requestOption: const PermissionRequestOption(),
       );
-      if (!state.hasAccess) {
-        // 2) Запитуємо дозвіл
-        state = await PhotoManager.requestPermissionExtend(
-          requestOption: const PermissionRequestOption(),
-        );
-      }
-
-      // 3) Повторна перевірка після запиту (деякі пристрої повертають стан не одразу)
-      state = await PhotoManager.getPermissionState(
-        requestOption: const PermissionRequestOption(),
-      );
-      if (!state.hasAccess) {
+      if (!perm.hasAccess) {
         setState(() {
           _permissionGranted = false;
           _photos = [];
         });
+        // Пояснювальне модальне вікно з неможливістю пропустити (без переходу в налаштування)
+        await _showBlockingPermissionModal(
+          title: 'Немає доступу до галереї',
+          message:
+              'Нам потрібен доступ до ваших фото, щоб додати зображення профілю. '
+              'Натисніть “Надати доступ”, щоб продовжити.',
+          onRetry: () async {
+            final again = await PhotoManager.requestPermissionExtend(
+              requestOption: const PermissionRequestOption(),
+            );
+            if (again.hasAccess) {
+              await _loadGalleryImages();
+            } else {
+              // Залишимо на екрані прохання про дозвіл
+              if (mounted) {
+                setState(() {
+                  _permissionGranted = false;
+                  _photos = [];
+                });
+              }
+            }
+          },
+        );
         _isLoading = false;
         return;
       }
@@ -117,6 +130,10 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
   }
 
   Future<void> _pickCameraImage() async {
+    // Запит камери окремо та дружнє блокуюче вікно при відмові
+    if (!await _ensureCameraPermission()) {
+      return;
+    }
     final pickedFile = await _picker.pickImage(source: ImageSource.camera);
     if (pickedFile != null) {
       final file = File(pickedFile.path);
@@ -130,6 +147,92 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
         });
       }
     }
+  }
+
+  Future<bool> _ensureCameraPermission() async {
+    var status = await Permission.camera.status;
+    if (status.isGranted) return true;
+    status = await Permission.camera.request();
+    if (status.isGranted) return true;
+    // Якщо користувач відмовив — пояснити і дати кнопку “Надати доступ” (без переходу в налаштування)
+    await _showBlockingPermissionModal(
+      title: 'Немає доступу до камери',
+      message:
+          'Нам потрібен доступ до камери, щоб зробити фото. '
+          'Натисніть “Надати доступ”, щоб продовжити.',
+      onRetry: () async {
+        await Permission.camera.request();
+      },
+    );
+    return false;
+  }
+
+  Future<void> _showBlockingPermissionModal({
+    required String title,
+    required String message,
+    required Future<void> Function() onRetry,
+  }) async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Styles().primaryColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lock_outline, color: Styles().titleColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        color: Styles().titleColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await onRetry();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Styles().checkColor,
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Надати доступ',
+                    style: TextStyle(color: Styles().titleColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<AssetEntity?> _saveImageToGallery(File file) async {
@@ -287,22 +390,13 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () async {
-                              await PhotoManager.openSetting();
-                            },
-                            child: Text(FlutterI18n.translate(context, 'gallery.open_settings')),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton(
-                            onPressed: _loadGalleryImages,
-                            style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor),
-                            child: Text(FlutterI18n.translate(context, 'gallery.retry'), style: TextStyle(color: Styles().titleColor)),
-                          ),
-                        ],
+                      ElevatedButton(
+                        onPressed: _loadGalleryImages,
+                        style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor),
+                        child: Text(
+                          FlutterI18n.translate(context, 'gallery.retry'),
+                          style: TextStyle(color: Styles().titleColor),
+                        ),
                       ),
                     ],
                   ),
