@@ -34,6 +34,7 @@ import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:carbeat/navigation/route_observer.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:carbeat/services/api_services/api_service.dart';
+import 'package:carbeat/services/navigation_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -140,6 +141,10 @@ class _LifecycleWrapperState extends State<_LifecycleWrapper>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Run an initial check once the subtree (including Navigator) is mounted
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onResumed();
+    });
   }
 
   @override
@@ -183,7 +188,6 @@ class _MyAppState extends State<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       DynamicLinksService.handleInitialAndListen(context);
       AnalyticsService.logAppOpen();
-      UpdateService.checkForUpdates(context);
     });
   }
 
@@ -206,16 +210,23 @@ class _MyAppState extends State<MyApp> {
           builder: (context, languageProvider, child) {
         return MaterialApp(
           key: key,
+          navigatorKey: NavigationService.navigatorKey,
           scrollBehavior: AppScrollBehavior(),
           navigatorObservers: [
             routeObserver,
             FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
           ],
           builder: (context, child) {
-            // Check updates when app resumes to foreground
-            return _LifecycleWrapper(
-              onResumed: () => UpdateService.checkForUpdates(context),
-              child: child ?? const SizedBox.shrink(),
+            // Wrap with a Builder to obtain a context that is a descendant of Navigator.
+            // MaterialApp.builder's context is above Navigator, so dialogs would fail.
+            return Builder(
+              builder: (innerCtx) {
+                // Check updates when app resumes to foreground
+                return _LifecycleWrapper(
+                  onResumed: () => UpdateService.checkForUpdates(innerCtx),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
             );
           },
           
