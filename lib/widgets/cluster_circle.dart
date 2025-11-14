@@ -57,7 +57,7 @@ class _ClusterCircleState extends State<ClusterCircle> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     final int count = widget.markers.length;
-    final bool hasPremium = widget.markers.any((m) => m.master.tariffId == 2);
+    final bool hasPremium = widget.markers.any((m) => m.master.isPremium == true);
   
     final Color baseGreen = Styles().primaryColor;
   

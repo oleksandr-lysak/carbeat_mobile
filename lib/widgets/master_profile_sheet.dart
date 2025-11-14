@@ -7,17 +7,16 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:carbeat/constants/app_constants.dart';
 import 'package:carbeat/constants/styles.dart';
 import 'package:carbeat/models/user.dart';
+import 'package:carbeat/models/master.dart';
 import 'package:carbeat/providers/service_provider.dart';
 import 'package:carbeat/services/api_services/api_service.dart';
 import 'package:carbeat/services/user_service.dart';
 import 'package:carbeat/widgets/animated_dropdown_field.dart';
-import 'package:carbeat/widgets/animated_text_field.dart';
 import 'package:provider/provider.dart';
 //import '../services/api_services/auth_service.dart';
 import 'app_toast.dart';
-import '../utils/phone_validator.dart';
 import 'package:image/image.dart' as img;
-import 'package:carbeat/utils/image_utils.dart';
+import 'package:carbeat/pages/premium/premium_page.dart';
 
 class MasterProfileSheet extends StatefulWidget {
   const MasterProfileSheet({super.key});
@@ -43,6 +42,10 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   String _mainPhotoPath = '';
   bool _uploading = false;
   double _uploadProgress = 0.0;
+  // subscription-related limits
+  int _maxPhotos = 3;
+  int _maxDescription = 200;
+  int _maxServices = 2;
 
   @override
   void initState() {
@@ -57,8 +60,8 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       Navigator.pop(context);
       return;
     }
-    final m = user.master!;
-    _masterId = m.id!;
+    final Master m = user.master as Master;
+    _masterId = m.id;
     _phoneCtrl.text = m.phone;
     _descrCtrl.text = m.description;
     _mainPhotoPath = m.mainPhoto;
@@ -91,6 +94,16 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       if (mainPhoto.isNotEmpty) _mainPhotoPath = mainPhoto;
       final int mainServiceId = (data['main_service_id'] is num) ? (data['main_service_id'] as num).toInt() : _selectedService!.id;
       _selectedService = DropdownItem(id: mainServiceId, name: _selectedService!.name);
+    } catch (_) {
+      // ignore
+    }
+    // Fetch limits/status
+    try {
+      final statusRes = await ApiService(AppConstants.serverUrl).getRequest('user/status');
+      final s = statusRes['data'] ?? statusRes;
+      _maxPhotos = (s['max_photos'] is num) ? (s['max_photos'] as num).toInt() : _maxPhotos;
+      _maxDescription = (s['max_description'] is num) ? (s['max_description'] as num).toInt() : _maxDescription;
+      _maxServices = (s['max_services'] is num) ? (s['max_services'] as num).toInt() : _maxServices;
     } catch (_) {
       // ignore
     }
@@ -176,6 +189,10 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                           ),
                           const Spacer(),
                           IconButton(
+                            icon: const Icon(Icons.check, color: Colors.greenAccent),
+                            onPressed: _save,
+                          ),
+                          IconButton(
                             icon: Icon(Icons.close, color: Styles().titleColor),
                             onPressed: () => Navigator.pop(context),
                           ),
@@ -184,20 +201,55 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                     ),
                     const Divider(height: 1),
                     const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: _pickAvatar,
-                      child: CircleAvatar(
-                        radius: 45,
-                        backgroundColor: Styles().backgroundFormColor,
-                        backgroundImage: _avatarBase64 != null
-                            ? MemoryImage(base64Decode(_avatarBase64!.split(',').last))
-                            : (_mainPhotoPath.isNotEmpty
-                                ? NetworkImage(_buildUrl(_mainPhotoPath))
-                                : null) as ImageProvider<Object>?,
-                        child: _avatarBase64 == null && _mainPhotoPath.isEmpty
-                            ? Icon(Icons.camera_alt, size: 30, color: Styles().primaryColor)
-                            : null,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: _pickAvatar,
+                          child: CircleAvatar(
+                            radius: 45,
+                            backgroundColor: Styles().backgroundFormColor,
+                            backgroundImage: _avatarBase64 != null
+                                ? MemoryImage(base64Decode(_avatarBase64!.split(',').last))
+                                : (_mainPhotoPath.isNotEmpty
+                                    ? NetworkImage(_buildUrl(_mainPhotoPath))
+                                    : null) as ImageProvider<Object>?,
+                            child: _avatarBase64 == null && _mainPhotoPath.isEmpty
+                                ? Icon(Icons.camera_alt, size: 30, color: Styles().primaryColor)
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(10, 40),
+                            side: BorderSide(color: Styles().checkColor),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const PremiumPage()),
+                            );
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.workspace_premium, color: Colors.amber, size: 18),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Оформити Premium',
+                                style: TextStyle(
+                                  color: Styles().titleColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 20),
                     TextField(
@@ -236,6 +288,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                     TextField(
                       controller: _descrCtrl,
                       maxLines: 3,
+                      onChanged: (_) => setState(() {}),
                       style: TextStyle(
                         color: Styles().primaryColor,
                         fontSize: 16,
@@ -263,6 +316,14 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                           ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '${_descrCtrl.text.length} / $_maxDescription',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -452,34 +513,6 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                         },
                       ),
                     const SizedBox(height: 24),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Styles().primaryColor,
-                        minimumSize: const Size.fromHeight(50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: _save,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.save, color: Colors.white),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Зберегти',
-                            style: TextStyle(
-                              color: Styles().titleColor,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -574,6 +607,15 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       final res = await api.postRequest('masters/$_masterId/gallery', {
         'photos': chunk,
       });
+      // Handle premium limit error
+      final status = (res['status'] is num) ? (res['status'] as num).toInt() : 200;
+      if (status == 403 && (res['upgrade_required'] == true || res['limit'] != null)) {
+        await _showUpgradeDialog(
+          title: 'Досягнуто ліміту фото',
+          message: 'Ви досягли ліміту фото. Оновіть профіль до Premium, щоб додати більше.',
+        );
+        break;
+      }
       if (res['message']?.toString().toLowerCase() != 'uploaded') {
         AppToast.show('Помилка завантаження фото', background: Colors.red);
         break;
@@ -591,6 +633,32 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       });
       AppToast.show('Фото завантажено', background: Colors.green);
     }
+  }
+
+  Future<void> _showUpgradeDialog({required String title, required String message}) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Styles().primaryColor,
+        title: Text(title, style: TextStyle(color: Styles().titleColor)),
+        content: Text(message, style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Закрити', style: TextStyle(color: Styles().titleColor)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PremiumPage()));
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor, elevation: 0),
+            child: Text('Оформити Premium', style: TextStyle(color: Styles().titleColor)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool> _ensurePhotosPermission() async {
@@ -695,7 +763,22 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
               ),
               child: AlertDialog(
                 backgroundColor: Styles().primaryColor,
-                title: Text('Додаткові послуги', style: TextStyle(color: Styles().titleColor)),
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Додаткові послуги', style: TextStyle(color: Styles().titleColor)),
+                    const SizedBox(height: 6),
+                    Builder(builder: (_) {
+                      final mainId = _selectedService?.id;
+                      final currentTotal = (mainId != null ? 1 : 0) + draft.length;
+                      final remaining = _maxServices - currentTotal;
+                      return Text(
+                        'Ви можете вибрати ще ${remaining < 0 ? 0 : remaining} послуг',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      );
+                    }),
+                  ],
+                ),
                 content: SizedBox(
                   width: double.maxFinite,
                   child: ListView.builder(
@@ -714,6 +797,12 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                           value: checked,
                           onChanged: (v) {
                             if (v == true) {
+                              final mainId = _selectedService?.id;
+                              final currentTotal = (mainId != null ? 1 : 0) + draft.length;
+                              if (currentTotal + 1 > _maxServices) {
+                                AppToast.show('Досягнуто ліміту послуг. Оновіть до Premium.', background: Colors.red);
+                                return;
+                              }
                               draft.add(svc.id);
                             } else {
                               draft.remove(svc.id);
@@ -765,7 +854,15 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       });
       AppToast.show('Послуги оновлено', background: Colors.green);
     } else {
-      AppToast.show('Не вдалося оновити послуги', background: Colors.red);
+      final status = (res['status'] is num) ? (res['status'] as num).toInt() : 400;
+      if (status == 403 && (res['upgrade_required'] == true || res['limit'] != null)) {
+        await _showUpgradeDialog(
+          title: 'Досягнуто ліміту послуг',
+          message: 'Ви можете обрати не більше $_maxServices послуг. Оновіть до Premium для розширення.',
+        );
+      } else {
+        AppToast.show('Не вдалося оновити послуги', background: Colors.red);
+      }
     }
   }
 
@@ -816,7 +913,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                     right: 6,
                     child: InkWell(
                       onTap: () async {
-                        await _deletePhoto(photoId!);
+                        await _deletePhoto(photoId);
                       },
                       child: Container(
                         decoration: BoxDecoration(
@@ -902,7 +999,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     final api = ApiService(AppConstants.serverUrl);
 
     // Ensure avatar prepared and under 500KB
@@ -937,6 +1034,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
     } else {
       // Handle validation errors
       String errorMessage = 'Error';
+      final status = (res['status'] is num) ? (res['status'] as num).toInt() : 400;
       if (res['errors'] != null) {
         final errors = res['errors'] as Map<String, dynamic>;
         if (errors['service_id'] != null) {
@@ -947,7 +1045,13 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       } else if (res['error'] != null) {
         errorMessage = res['message'].toString();
       }
-      
+      if (status == 422 && (res['limit'] != null)) {
+        await _showUpgradeDialog(
+          title: 'Опис занадто довгий',
+          message: 'Опис занадто довгий. Підключіть Premium, щоб збільшити ліміт.',
+        );
+        return;
+      }
       AppToast.show(errorMessage, background: Colors.red);
     }
   }

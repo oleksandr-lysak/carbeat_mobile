@@ -13,7 +13,8 @@ class Master {
   final String mainPhoto;
   final String mainThumbUrl;
   final int specialityId;
-  final int tariffId;
+  final bool isPremium;
+  final String? premiumUntil;
   List<Service> services;
   bool available = false;
 
@@ -27,7 +28,8 @@ class Master {
     required this.rating,
     required this.mainPhoto,
     required this.specialityId,
-    required this.tariffId,
+    required this.isPremium,
+    this.premiumUntil,
     this.services = const [],
     required this.available,
     required this.mainThumbUrl,
@@ -52,7 +54,8 @@ class Master {
       mainThumbUrl: json['main_thumb_url']??'',
       specialityId: json['main_service_id']??0,
       rating: double.parse((json['rating']??0).toString()),
-      tariffId: json['tariff_id']??1,
+      isPremium: (json['is_premium'] ?? false) == true,
+      premiumUntil: json['premium_until'],
       services: json['services'] != null
           ? List<Service>.from(
               json['services'].map((service) => Service.fromJson(service)))
@@ -75,7 +78,8 @@ class Master {
       'photo': mainPhoto,
       'main_thumb_url': mainThumbUrl,
       'speciality_id': specialityId,
-      'tariff_id': tariffId,
+      'is_premium': isPremium,
+      'premium_until': premiumUntil,
       'services': services,
     };
   }

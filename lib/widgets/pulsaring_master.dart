@@ -102,7 +102,7 @@ class PulsatingIconState extends State<PulsatingMaster>
     }
 
     // Стилі обвідки
-    final bool isPaid = widget.master.tariffId == 2;
+    final bool isPaid = widget.master.isPremium == true;
     final bool isAvailable = widget.master.available;
 
     Color outerBorderColor;

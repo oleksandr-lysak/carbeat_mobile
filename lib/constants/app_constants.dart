@@ -56,4 +56,9 @@ class AppConstants {
       child: Text('Українська'),
     ),
   ];
+
+  // In-app purchase product IDs
+  // Make sure to create these in App Store Connect and Google Play Console
+  static const String iosPremiumMonthlyProductId = 'premium_monthly';
+  static const String androidPremiumMonthlyProductId = 'premium_monthly';
 }
