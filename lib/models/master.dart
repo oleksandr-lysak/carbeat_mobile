@@ -80,7 +80,7 @@ class Master {
       'speciality_id': specialityId,
       'is_premium': isPremium,
       'premium_until': premiumUntil,
-      'services': services,
+      'services': services.map((s) => s.toJson()).toList(),
     };
   }
 }

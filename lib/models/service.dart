@@ -12,4 +12,12 @@ class Service {
       mastersCount: (json['masters_count'] is num) ? (json['masters_count'] as num).toInt() : 0,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'masters_count': mastersCount,
+    };
+  }
 }
