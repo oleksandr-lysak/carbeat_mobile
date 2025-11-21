@@ -6,6 +6,7 @@ import 'package:carbeat/models/user.dart';
 import 'package:carbeat/services/log_service.dart';
 import 'package:carbeat/services/user_service.dart';
 import 'package:provider/provider.dart';
+import 'package:sms_autofill/sms_autofill.dart';
 import '../token_service.dart';
 import 'api_service.dart';
 
@@ -99,9 +100,15 @@ class AuthService {
   }
 
   Future<bool> sendSms(String phone) async {
-    var result = await apiService.postRequest('auth/request-otp', {
-      'phone': phone,
-    });
+    String? appHash;
+    try {
+      appHash = await SmsAutoFill().getAppSignature;
+    } catch (_) {}
+    final payload = <String, dynamic>{'phone': phone};
+    if (appHash != null && appHash.isNotEmpty) {
+      payload['app_hash'] = appHash;
+    }
+    var result = await apiService.postRequest('auth/request-otp', payload);
     LogService.log('Send SMS result: $result');
     return result['needs_registration'] ?? false;
   }

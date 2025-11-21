@@ -154,7 +154,7 @@ class UpdateService {
       for (final base in candidates) {
         try {
           final api = ApiService(base);
-          final res = await api.getRequest('app/version?platform=$platform&build=$currentBuild');
+      final res = await api.getRequest('app/version?platform=$platform&build=$currentBuild');
           data = (res.containsKey('data') && res['data'] is Map<String, dynamic>)
               ? (res['data'] as Map<String, dynamic>)
               : res;
@@ -207,7 +207,7 @@ class UpdateService {
             ),
             ElevatedButton(
               onPressed: () async {
-                await _openStore();
+                  await _openStore();
                 await AnalyticsService.logEvent('update_store_opened_soft');
                 if (ctx.mounted) Navigator.of(ctx).pop();
               },

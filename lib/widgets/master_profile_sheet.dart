@@ -13,7 +13,8 @@ import 'package:carbeat/services/api_services/api_service.dart';
 import 'package:carbeat/services/user_service.dart';
 import 'package:carbeat/widgets/animated_dropdown_field.dart';
 import 'package:provider/provider.dart';
-//import '../services/api_services/auth_service.dart';
+import 'package:carbeat/services/api_services/auth_service.dart';
+import 'package:carbeat/services/token_service.dart';
 import 'app_toast.dart';
 import 'package:image/image.dart' as img;
 import 'package:carbeat/pages/premium/premium_page.dart';
@@ -513,6 +514,27 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                         },
                       ),
                     const SizedBox(height: 24),
+                  // Logout section
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.logout, color: Colors.white),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.redAccent.withOpacity(0.8), width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: Colors.transparent,
+                      ),
+                      onPressed: _logout,
+                      label: Text(
+                        'Вийти з акаунту',
+                        style: TextStyle(color: Styles().titleColor, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -1053,6 +1075,22 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
         return;
       }
       AppToast.show(errorMessage, background: Colors.red);
+    }
+  }
+
+  Future<void> _logout() async {
+    try {
+      await AuthService().logout();
+    } catch (_) {}
+    try {
+      await TokenService().deleteTokens();
+    } catch (_) {}
+    try {
+      await UserService().deleteUser();
+    } catch (_) {}
+    if (mounted) {
+      AppToast.show('Ви вийшли з акаунту', background: Colors.green);
+      Navigator.pop(context);
     }
   }
 } 

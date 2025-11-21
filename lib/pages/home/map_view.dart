@@ -902,7 +902,18 @@ class MapViewState extends State<MapView>
                               isScrollControlled: true,
                               backgroundColor: Styles().primaryColor,
                               builder: (_) => const MasterProfileSheet(),
-                            );
+                            ).then((_) async {
+                              // Refresh auth-dependent UI after closing the sheet (e.g., after logout)
+                              await _updateMasterStatus();
+                              if (mounted) {
+                                setState(() {
+                                  // also clear selection to avoid showing master-only UI states
+                                  _selectedMasterId = null;
+                                  selectedIndex = -1;
+                                  _createMarkers();
+                                });
+                              }
+                            });
                           } else {
                             await showMasterDialog(
                               context,

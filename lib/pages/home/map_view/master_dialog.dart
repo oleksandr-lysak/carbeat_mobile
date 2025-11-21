@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
+import 'package:sms_autofill/sms_autofill.dart';
 
 
 import '../../../services/api_services/auth_service.dart';
@@ -8,6 +9,7 @@ import '../../../constants/styles.dart';
 import '../../../services/user_service.dart';
 import '../../../models/user.dart';
 import '../../../utils/phone_validator.dart';
+import '../../../services/log_service.dart';
 
 Future<void> showMasterDialog(BuildContext context, {VoidCallback? onAuthorized, void Function(String phone)? onStartRegistration}) {
   final _formKey = GlobalKey<FormState>();
@@ -112,8 +114,22 @@ Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegist
     useRootNavigator: true,
     builder: (BuildContext ctx) {
       String? error;
+      bool listeningStarted = false;
       return StatefulBuilder(
         builder: (ctx, setState) {
+          // Start SMS Retriever / User Consent once (Android)
+          if (!listeningStarted) {
+            listeningStarted = true;
+            try {
+              SmsAutoFill().listenForCode();
+              // Log signature hash to configure backend SMS
+              SmsAutoFill().getAppSignature.then((sig) {
+                try {
+                  LogService.log('Android App Signature: $sig');
+                } catch (_) {}
+              });
+            } catch (_) {}
+          }
           return AlertDialog(
             backgroundColor: Styles().primaryColor,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -138,13 +154,48 @@ Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegist
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AnimatedTextField(
+                // Auto-fill capable input
+                PinFieldAutoFill(
                   keyboardType: TextInputType.number,
-                  controller: codeController,
-                  labelText: FlutterI18n.translate(ctx, 'map_view.master_dialog.input_otp'),
-                  validator: (_) {
-                    if (error != null) return error;
-                    return null;
+                  codeLength: 4,
+                  currentCode: codeController.text,
+                  decoration: UnderlineDecoration(
+                    colorBuilder: FixedColorBuilder(Colors.white30),
+                    textStyle: TextStyle(color: Styles().titleColor, fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  onCodeChanged: (code) async {
+                    setState(() { error = null; });
+                    if (code != null) {
+                      codeController.text = code;
+                      if (code.length >= 4) {
+                        // Try auto-submit for 4-6 digits
+                        try {
+                          final success = await AuthService().confirmLogin(phone, int.parse(code), ctx);
+                          if (!success) {
+                            setState(() {
+                              error = FlutterI18n.translate(ctx, 'invalid_code');
+                            });
+                            return;
+                          }
+                          if (needsRegistration) {
+                            Navigator.pop(ctx);
+                            if (onStartRegistration != null) {
+                              onStartRegistration(phone);
+                            } else {
+                              Navigator.pushReplacementNamed(ctx, '/map-picker', arguments: {'phone': phone});
+                            }
+                          } else {
+                            final user = await UserService().getUser();
+                            if (user != null && ctx.mounted) {
+                              Navigator.pop(ctx);
+                              onAuthorized?.call();
+                            }
+                          }
+                        } catch (_) {
+                          // ignore parse/submit issues; user can tap submit
+                        }
+                      }
+                    }
                   },
                 ),
                 if (error != null)
@@ -164,7 +215,10 @@ Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegist
                         foregroundColor: Styles().titleColor,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: () => Navigator.pop(ctx),
+                      onPressed: () {
+                        try { SmsAutoFill().unregisterListener(); } catch (_) {}
+                        Navigator.pop(ctx);
+                      },
                       child: Text(FlutterI18n.translate(ctx, 'common.cancel')),
                     ),
                   ),
@@ -194,6 +248,7 @@ Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegist
                         }
 
                         if (needsRegistration) {
+                          try { SmsAutoFill().unregisterListener(); } catch (_) {}
                           Navigator.pop(ctx);
                           if (onStartRegistration != null) {
                             onStartRegistration(phone);
@@ -207,6 +262,7 @@ Future<void> _showOtpDialog(BuildContext context, String phone, bool needsRegist
                         } else {
                           User? user = await UserService().getUser();
                           if (user != null && ctx.mounted) {
+                            try { SmsAutoFill().unregisterListener(); } catch (_) {}
                             Navigator.pop(ctx);
 
                             if (onAuthorized != null) {

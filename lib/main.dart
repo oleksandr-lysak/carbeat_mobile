@@ -221,10 +221,10 @@ class _MyAppState extends State<MyApp> {
             // MaterialApp.builder's context is above Navigator, so dialogs would fail.
             return Builder(
               builder: (innerCtx) {
-                // Check updates when app resumes to foreground
-                return _LifecycleWrapper(
+            // Check updates when app resumes to foreground
+            return _LifecycleWrapper(
                   onResumed: () => UpdateService.checkForUpdates(innerCtx),
-                  child: child ?? const SizedBox.shrink(),
+              child: child ?? const SizedBox.shrink(),
                 );
               },
             );
