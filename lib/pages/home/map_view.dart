@@ -1416,7 +1416,7 @@ class MapViewState extends State<MapView>
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
-                      cursorColor: Styles().primaryColor,
+                      cursorColor: Styles().titleColor,
                       onChanged: (val) {
                         final n = int.tryParse(val);
                         if (n != null && n > 0) minutes = n;

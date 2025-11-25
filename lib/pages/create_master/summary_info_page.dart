@@ -13,12 +13,10 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:carbeat/constants/styles.dart';
 import 'package:carbeat/widgets/loading.dart';
 import 'package:latlong2/latlong.dart' as lat_lng;
-import 'package:provider/provider.dart';
-import 'package:image/image.dart' as img;
+import 'package:sms_autofill/sms_autofill.dart';
 
-import '../../providers/theme_provider.dart';
 import 'package:carbeat/utils/image_utils.dart';
-import '../../widgets/animated_text_field.dart';
+import 'package:carbeat/services/log_service.dart';
 
 class SummaryInfoPage extends StatefulWidget {
   const SummaryInfoPage({super.key});
@@ -33,6 +31,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   late Animation<double> _fadeAnimation;
   final TextEditingController _verificationCodeController =
       TextEditingController();
+  bool _isListeningForOtp = false;
 
   lat_lng.LatLng? _selectedLocation;
   String? _phone;
@@ -76,10 +75,14 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   void dispose() {
     _animationController.dispose();
     _verificationCodeController.dispose();
+    try {
+      SmsAutoFill().unregisterListener();
+    } catch (_) {}
     super.dispose();
   }
 
   void initData() async {
+    _startOtpListener();
     AuthService().sendSms(_phone!);
     if (_selectedLocation != null) {
       _address = await LocationService.getAddressFromCoordinates(
@@ -105,6 +108,25 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
       isLoading = false;
       _animationController.forward();
     });
+  }
+
+  void _startOtpListener() async {
+    if (_isListeningForOtp) return;
+    _isListeningForOtp = true;
+    try {
+      await SmsAutoFill().unregisterListener();
+    } catch (_) {}
+    try {
+      await SmsAutoFill().listenForCode();
+      final sig = await SmsAutoFill().getAppSignature;
+      if (sig.isNotEmpty) {
+        try {
+          LogService.log('Android App Signature (registration): $sig');
+        } catch (_) {}
+      }
+    } catch (_) {
+      _isListeningForOtp = false;
+    }
   }
 
   Future<void> _getPhotoFromGallery(String photoId) async {
@@ -165,7 +187,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
                     ),
                   ),
                 ),
-                onPressed: isLoading ? null : _registerUser,
+                onPressed: isLoading ? null : () => _registerUser(),
                 child: Text(
                   FlutterI18n.translate(context, 'summary_info_page.register_button'),
                   style: TextStyle(color: Styles().titleColor, fontSize: 24),
@@ -182,13 +204,27 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
         if (_processedPhotoFile != null || _photoFile != null) _buildPhotoTile(),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: AnimatedTextField(
+          child: PinFieldAutoFill(
             controller: _verificationCodeController,
-            labelText: FlutterI18n.translate(context, 'verification_sms_code'),
-            hintText: FlutterI18n.translate(context, 'enter_verification_code'),
-            validator: (value) => value?.isEmpty ?? true
-                ? FlutterI18n.translate(context, 'required')
-                : null,
+            currentCode: _verificationCodeController.text,
+            codeLength: 4,
+            keyboardType: TextInputType.number,
+            decoration: UnderlineDecoration(
+              colorBuilder: FixedColorBuilder(Colors.white30),
+              textStyle: TextStyle(
+                color: Styles().titleColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onCodeChanged: (code) async {
+              if (code == null) return;
+              _verificationCodeController.text = code;
+              setState(() {});
+              if (code.length >= 4 && !isLoading) {
+                await _registerUser(autoSubmit: true);
+              }
+            },
           ),
         ),
         if (_address != null)
@@ -291,7 +327,7 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
     );
   }
 
-  void _registerUser() async {
+  Future<void> _registerUser({bool autoSubmit = false}) async {
     // Basic client-side validation to avoid silent errors
     final code = _verificationCodeController.text.trim();
     if (code.isEmpty) {
@@ -342,9 +378,6 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
       photo = null;
     }
 
-      final int bytes = toSend != null ? await toSend.length() : 0;
-      final double sizeMb = bytes / (1024 * 1024);
-
       Map<String, dynamic> request = {
         'sms_code': code,
         'phone': _phone,
@@ -360,6 +393,10 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
 
       await AuthService().register(request, context);
       User? user = await UserService().getUser();
+      try {
+        await SmsAutoFill().unregisterListener();
+        _isListeningForOtp = false;
+      } catch (_) {}
       if (user != null && user.master != null) {
         Master master = user.master!;
         int? masterId = master.id;

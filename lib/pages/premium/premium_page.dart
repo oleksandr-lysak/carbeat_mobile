@@ -342,7 +342,7 @@ class _LegalNotice extends StatelessWidget {
     if (products.isNotEmpty) {
       return products.first.price;
     }
-    return '9.99/місяць';
+    return '9.99 євро/місяць';
   }
 
   @override
@@ -389,7 +389,11 @@ class _Link extends StatelessWidget {
       },
       child: Text(
         text,
-        style: const TextStyle(color: Colors.lightBlueAccent, decoration: TextDecoration.underline),
+        style: const TextStyle(
+          color: Colors.greenAccent,
+          fontWeight: FontWeight.w900,
+          decoration: TextDecoration.underline,
+        ),
       ),
     );
   }

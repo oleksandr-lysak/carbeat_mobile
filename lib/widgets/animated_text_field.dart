@@ -58,7 +58,7 @@ class AnimatedTextFieldState extends State<AnimatedTextField> {
                 controller: widget.controller,
                 keyboardType: widget.keyboardType,
                 obscureText: widget.isPasswordField,
-                cursorColor: Styles().primaryColor,
+                cursorColor: Styles().titleColor,
                 style: TextStyle(
                   color: Styles().titleColor,
                   fontSize: 16,
