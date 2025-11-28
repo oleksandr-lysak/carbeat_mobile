@@ -16,6 +16,7 @@ import 'package:carbeat/widgets/animated_dropdown_field.dart';
 import 'package:provider/provider.dart';
 import 'package:carbeat/services/api_services/auth_service.dart';
 import 'package:carbeat/services/token_service.dart';
+import 'package:carbeat/services/log_service.dart';
 import 'app_toast.dart';
 import 'package:image/image.dart' as img;
 import 'package:carbeat/pages/premium/premium_page.dart';
@@ -613,48 +614,82 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       });
     }
 
-    // Prepare base64 with prefix and chunk into max 10 per request
-    List<String> payload = [];
-    for (final x in picked) {
-      final bytes = await x.readAsBytes();
-      final processed = await _processSquareUnder500kb(bytes);
-      final b64 = base64Encode(processed);
-      // Assume jpeg for simplicity; can branch by extension if needed
-      payload.add('data:image/jpeg;base64,$b64');
-    }
-
-    final api = ApiService(AppConstants.serverUrl);
-    int sent = 0;
-    while (sent < payload.length) {
-      final chunk = payload.sublist(sent, (sent + 10) > payload.length ? payload.length : sent + 10);
-      final res = await api.postRequest('masters/$_masterId/gallery', {
-        'photos': chunk,
-      });
-      // Handle premium limit error
-      final status = (res['status'] is num) ? (res['status'] as num).toInt() : 200;
-      if (status == 403 && (res['upgrade_required'] == true || res['limit'] != null)) {
-        await _showUpgradeDialog(
-          title: 'Досягнуто ліміту фото',
-          message: 'Ви досягли ліміту фото. Оновіть профіль до Premium, щоб додати більше.',
-        );
-        break;
+    bool allUploaded = false;
+    try {
+      // Prepare base64 with prefix and chunk into max 10 per request
+      List<String> payload = [];
+      for (final x in picked) {
+        final bytes = await x.readAsBytes();
+        final processed = await _processSquareUnder500kb(bytes);
+        final b64 = base64Encode(processed);
+        // Assume jpeg for simplicity; can branch by extension if needed
+        payload.add('data:image/jpeg;base64,$b64');
       }
-      if (res['message']?.toString().toLowerCase() != 'uploaded') {
-        AppToast.show('Помилка завантаження фото', background: Colors.red);
-        break;
-      }
-      sent += chunk.length;
-      if (mounted) setState(() => _uploadProgress = sent / payload.length);
-    }
 
-    // Refresh details
-    await _load();
-    if (mounted) {
-      setState(() {
-        _uploading = false;
-        _uploadProgress = 0.0;
-      });
-      AppToast.show('Фото завантажено', background: Colors.green);
+      final api = ApiService(AppConstants.serverUrl);
+      int sent = 0;
+      while (sent < payload.length) {
+        final chunk = payload.sublist(sent, (sent + 10) > payload.length ? payload.length : sent + 10);
+        Map<String, dynamic> res;
+        try {
+          res = await api.postRequest('masters/$_masterId/gallery', {
+            'photos': chunk,
+          });
+        } catch (e) {
+          // Network / DioException without response
+          await LogService.log('Gallery upload failed (exception) for master $_masterId: $e');
+          AppToast.show('Помилка завантаження фото', background: Colors.red);
+          break;
+        }
+        final Map<String, dynamic> responseData = (res['data'] is Map<String, dynamic>)
+            ? Map<String, dynamic>.from(res['data'] as Map<String, dynamic>)
+            : Map<String, dynamic>.from(res);
+        final status = (responseData['status'] is num)
+            ? (responseData['status'] as num).toInt()
+            : ((res['status'] is num) ? (res['status'] as num).toInt() : 200);
+        final error = responseData['error'] ?? res['error'];
+        final messageRaw = responseData['message'] ?? res['message'];
+        if ((status == 403 || error == 'photos_limit') &&
+            (responseData['upgrade_required'] == true || responseData['limit'] != null)) {
+          final int? limit =
+              responseData['limit'] is num ? (responseData['limit'] as num).toInt() : null;
+          await _showUpgradeDialog(
+            title: 'Досягнуто ліміту фото',
+            message: limit != null
+                ? 'Ви вже завантажили максимум ($limit) фото. Оформіть Premium, щоб додати більше.'
+                : 'Ви досягли ліміту фото. Оновіть профіль до Premium, щоб додати більше.',
+          );
+          await LogService.log(
+              'Gallery upload blocked by limit for master $_masterId. Status: $status, response: $res');
+          break;
+        }
+        final isError = responseData['error'] == true || res['error'] == true || status >= 400;
+        final message = (messageRaw ?? '').toString().toLowerCase();
+        if (isError || message != 'uploaded') {
+          await LogService.log(
+              'Gallery upload failed for master $_masterId. Status: $status, response: $res');
+          AppToast.show('Помилка завантаження фото', background: Colors.red);
+          break;
+        }
+        sent += chunk.length;
+        if (mounted) setState(() => _uploadProgress = sent / payload.length);
+      }
+
+      allUploaded = sent == payload.length && payload.isNotEmpty;
+      if (allUploaded) {
+        // Refresh details only if everything really uploaded
+        await _load();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+          _uploadProgress = 0.0;
+        });
+        if (allUploaded) {
+          AppToast.show('Фото завантажено', background: Colors.green);
+        }
+      }
     }
   }
 
@@ -1051,16 +1086,15 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
     // Check for both 'error' and 'errors' fields
     if (res['error'] == null && res['errors'] == null) {
       AppToast.show('Профіль оновлено', duration: Duration(seconds: 10), background: Colors.green);
-      Navigator.pop(context);
       // Refresh local user data after successful update
       final api = ApiService(AppConstants.serverUrl);
       final meResponse = await api.getRequest('auth/me');
       final userJson = meResponse.containsKey('user') ? meResponse['user'] : meResponse;
       final user = User.fromJson(userJson as Map<String, dynamic>);
       await UserService().saveUserData(user);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated')));
+      Navigator.pop(context);
     } else {
       // Handle validation errors
       String errorMessage = 'Error';

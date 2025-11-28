@@ -15,9 +15,14 @@ class AppConstants {
       "https://api.mapbox.com/styles/v1/rotting/$mapBoxStyleId/tiles/256/{z}/{x}/{y}@2x?access_token=$mapBoxAccessToken";
 
   // LOCAL endpoints (used in debug/profile by default)
-  static const String _localServerUrl = 'http://192.168.103.75:100/api/';
-  static const String _localPublicServerUrl = 'http://192.168.103.75:100/';
-  static const String _localSocketUrl = 'http://192.168.103.75:100/';
+  // static const String _localServerUrl = 'http://192.168.103.75:100/api/';
+  // static const String _localPublicServerUrl = 'http://192.168.103.75:100/';
+  // static const String _localSocketUrl = 'http://192.168.103.75:100/';
+  static const String _localServerUrl = 'http://10.0.2.2:100/api/';
+  static const String _localPublicServerUrl = 'http://10.0.2.2:100/';
+  static const String _localSocketUrl = 'http://10.0.2.2:100/';
+
+
   // PROD endpoints (used in release)
   static const String _prodServerUrl = 'https://carbeat.online/api/';
   static const String _prodPublicServerUrl = 'https://carbeat.online/';

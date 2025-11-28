@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:in_app_update/in_app_update.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -56,7 +57,47 @@ class UpdateService {
       return;
     }
 
-    final AppUpdateInfo info = await InAppUpdate.checkForUpdate();
+    AppUpdateInfo? info;
+    try {
+      info = await InAppUpdate.checkForUpdate();
+    } on PlatformException catch (e) {
+      // Common in sideload/debug builds: app not owned in Play Store (ERROR_APP_NOT_OWNED / -10).
+      LogService.log('InAppUpdate.checkForUpdate PlatformException: $e');
+      await AnalyticsService.logEvent('update_check_failed', parameters: {
+        'error': e.toString(),
+        'code': e.code,
+        'message': e.message ?? '',
+      });
+
+      // Fallback: for builds below recommended, still show soft backend prompt (non-blocking).
+      if (currentBuild < recommended) {
+        final shouldPrompt = await _shouldPromptFlexible();
+        if (shouldPrompt) {
+          final dialogCtx = await _awaitNavigatorContext(context);
+          if (dialogCtx != null) {
+            await _showBackendSoftPrompt(dialogCtx);
+          }
+          await _markFlexiblePrompted();
+        }
+      }
+      return;
+    } catch (e) {
+      LogService.log('InAppUpdate.checkForUpdate error: $e');
+      await AnalyticsService.logEvent('update_check_failed', parameters: {
+        'error': e.toString(),
+      });
+      if (currentBuild < recommended) {
+        final shouldPrompt = await _shouldPromptFlexible();
+        if (shouldPrompt) {
+          final dialogCtx = await _awaitNavigatorContext(context);
+          if (dialogCtx != null) {
+            await _showBackendSoftPrompt(dialogCtx);
+          }
+          await _markFlexiblePrompted();
+        }
+      }
+      return;
+    }
 
     await AnalyticsService.logEvent('update_check_result', parameters: {
       'current_build': currentBuild.toString(),

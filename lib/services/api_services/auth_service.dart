@@ -58,11 +58,20 @@ class AuthService {
         userData,
       );
 
-      final token = response['token'];
+      final accessToken = response['access_token'] ?? response['token'];
+      final refreshToken = response['refresh_token'];
+      final expiresIn = response['expires_in'] is int ? response['expires_in'] as int : null;
       if (!context.mounted) return;
       final tokenService = Provider.of<TokenService>(context, listen: false);
       final userService = Provider.of<UserService>(context, listen: false);
-      await tokenService.saveToken(token);
+      if (accessToken != null && refreshToken != null) {
+        await tokenService.saveTokens(accessToken, refreshToken, expiresInSeconds: expiresIn);
+      } else if (accessToken != null) {
+        // Fallback for legacy responses without refresh token
+        await tokenService.saveToken(accessToken);
+      } else {
+        throw Exception('Token not provided by server');
+      }
 
       // Refresh full user after registration
       final me = await apiService.getRequest('auth/me');
@@ -122,10 +131,18 @@ class AuthService {
       'name': name,
       'phone': phone,
     });
-    final token = response['token'];
+    final accessToken = response['access_token'] ?? response['token'];
+    final refreshToken = response['refresh_token'];
+    final expiresIn = response['expires_in'] is int ? response['expires_in'] as int : null;
     final tokenService = TokenService();
     final userService = UserService();
-    await tokenService.saveToken(token);
+    if (accessToken != null && refreshToken != null) {
+      await tokenService.saveTokens(accessToken, refreshToken, expiresInSeconds: expiresIn);
+    } else if (accessToken != null) {
+      await tokenService.saveToken(accessToken);
+    } else {
+      throw Exception('Token not provided by server');
+    }
     Map<String, dynamic> data = {
       'id': response['user']['id'],
       'name': response['user']['name'],

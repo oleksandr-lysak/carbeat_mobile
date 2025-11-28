@@ -68,7 +68,6 @@ class _MasterDetailsSheetState extends State<MasterDetailsSheet> {
     final data = _data ?? {};
     final String name = data['name']?.toString() ?? '';
     final String address = data['address']?.toString() ?? '';
-    final String phone = data['phone']?.toString() ?? '';
     final double rating = (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0;
 
     final List<dynamic> photos = (data['photos'] is List) ? (data['photos'] as List) : [];
@@ -79,6 +78,12 @@ class _MasterDetailsSheetState extends State<MasterDetailsSheet> {
     ];
 
     final List<dynamic> services = (data['services'] is List) ? (data['services'] as List) : [];
+    final String? primaryServiceName = services
+        .cast<Map<String, dynamic>>()
+        .firstWhere(
+          (s) => (s['is_primary'] ?? false) == true,
+          orElse: () => <String, dynamic>{},
+        )['name']?.toString();
     final List<dynamic> reviews = (data['reviews'] is List) ? (data['reviews'] as List) : [];
 
     return DraggableScrollableSheet(
@@ -150,12 +155,25 @@ class _MasterDetailsSheetState extends State<MasterDetailsSheet> {
                   const SizedBox(height: 12),
                   if (imageUrls.isNotEmpty) _buildGallery(imageUrls),
                   const SizedBox(height: 16),
+                  if (primaryServiceName != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Основна послуга', style: TextStyle(color: Styles().titleColor, fontWeight: FontWeight.w600, fontSize: 18)),
+                          const SizedBox(height: 6),
+                          Text(primaryServiceName, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text('Послуги', style: TextStyle(color: Styles().titleColor, fontWeight: FontWeight.w600, fontSize: 18)),
+                    child: Text('Додаткові послуги', style: TextStyle(color: Styles().titleColor, fontWeight: FontWeight.w600, fontSize: 18)),
                   ),
                   const SizedBox(height: 8),
-                  _buildServices(services),
+                  _buildServices(services, primaryName: primaryServiceName),
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -252,7 +270,7 @@ class _MasterDetailsSheetState extends State<MasterDetailsSheet> {
     );
   }
 
-  Widget _buildServices(List<dynamic> services) {
+  Widget _buildServices(List<dynamic> services, {String? primaryName}) {
     if (services.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -264,7 +282,10 @@ class _MasterDetailsSheetState extends State<MasterDetailsSheet> {
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: services.map((s) {
+        children: services.where((s) {
+          final name = s['name']?.toString() ?? '';
+          return primaryName == null || name != primaryName;
+        }).map((s) {
           final name = s['name']?.toString() ?? '';
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
