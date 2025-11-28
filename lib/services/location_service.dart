@@ -11,10 +11,10 @@ class LocationService {
       final servicesEnabled = await Geolocator.isLocationServiceEnabled();
       if (!servicesEnabled) return null;
 
-      LocationPermission permission = await Geolocator.checkPermission();
+        LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
+          permission = await Geolocator.requestPermission();
+        }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever ||
           permission == LocationPermission.unableToDetermine) {
@@ -22,10 +22,10 @@ class LocationService {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+          desiredAccuracy: LocationAccuracy.high,
+        );
 
-      return LatLng(position.latitude, position.longitude);
+        return LatLng(position.latitude, position.longitude);
     } catch (e) {
       LogService.log('Error getting location: $e');
     }

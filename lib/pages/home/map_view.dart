@@ -310,13 +310,13 @@ class MapViewState extends State<MapView>
       // Try to get location with timeout only if permission granted
       LatLng? location;
       if (hasPermission) {
-        try {
-          location = await LocationService.getCurrentLocation().timeout(
-            const Duration(seconds: 5),
-          );
-        } catch (_) {
-          location = null;
-        }
+      try {
+        location = await LocationService.getCurrentLocation().timeout(
+          const Duration(seconds: 5),
+        );
+      } catch (_) {
+        location = null;
+      }
       }
 
       bool usingFallback = false;
