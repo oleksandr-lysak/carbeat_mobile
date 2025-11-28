@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:carbeat/constants/app_constants.dart';
@@ -49,6 +50,34 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   int _maxPhotos = 3;
   int _maxDescription = 200;
   int _maxServices = 2;
+
+  void _updateLimitsFromStatus(Map<String, dynamic> status) {
+    _maxPhotos =
+        (status['max_photos'] is num) ? (status['max_photos'] as num).toInt() : _maxPhotos;
+    _maxDescription = (status['max_description'] is num)
+        ? (status['max_description'] as num).toInt()
+        : _maxDescription;
+    _maxServices =
+        (status['max_services'] is num) ? (status['max_services'] as num).toInt() : _maxServices;
+  }
+
+  Future<void> _refreshSubscriptionLimits() async {
+    try {
+      final statusRes =
+          await ApiService(AppConstants.serverUrl).getRequest('user/status');
+      final Map<String, dynamic> status =
+          (statusRes['data'] is Map<String, dynamic>) ? statusRes['data'] : statusRes;
+      if (!mounted) {
+        _updateLimitsFromStatus(status);
+      } else {
+        setState(() {
+          _updateLimitsFromStatus(status);
+        });
+      }
+    } catch (_) {
+      // ignore network errors; keep previous limits
+    }
+  }
 
   @override
   void initState() {
@@ -101,15 +130,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       // ignore
     }
     // Fetch limits/status
-    try {
-      final statusRes = await ApiService(AppConstants.serverUrl).getRequest('user/status');
-      final s = statusRes['data'] ?? statusRes;
-      _maxPhotos = (s['max_photos'] is num) ? (s['max_photos'] as num).toInt() : _maxPhotos;
-      _maxDescription = (s['max_description'] is num) ? (s['max_description'] as num).toInt() : _maxDescription;
-      _maxServices = (s['max_services'] is num) ? (s['max_services'] as num).toInt() : _maxServices;
-    } catch (_) {
-      // ignore
-    }
+    await _refreshSubscriptionLimits();
     if (mounted) setState(() => _loadingDetails = false);
   }
 
@@ -255,7 +276,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    TextField(
+                    TextFormField(
                       controller: _phoneCtrl,
                       keyboardType: TextInputType.phone,
                       style: TextStyle(
@@ -288,10 +309,31 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    TextField(
+                    TextFormField(
                       controller: _descrCtrl,
                       maxLines: 3,
-                      onChanged: (_) => setState(() {}),
+                      maxLength: _maxDescription,
+                      maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                      buildCounter: (context,
+                          {required int currentLength,
+                          required bool isFocused,
+                          int? maxLength}) {
+                        final remaining = (maxLength ?? _maxDescription) - currentLength;
+                        return Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            '${currentLength}/${maxLength ?? _maxDescription} · лишилось ${remaining < 0 ? 0 : remaining}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        );
+                      },
+                      validator: (value) {
+                        final text = value ?? '';
+                        if (text.length > _maxDescription) {
+                          return 'Максимальна довжина опису $_maxDescription символів.';
+                        }
+                        return null;
+                      },
                       style: TextStyle(
                         color: Styles().primaryColor,
                         fontSize: 16,
@@ -319,14 +361,6 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                           ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '${_descrCtrl.text.length} / $_maxDescription',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -385,7 +419,18 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                           ),
                         ),
                       )).toList(),
-                      onChanged: (val) => setState(() => _selectedService = val),
+                      onChanged: (val) {
+                        setState(() {
+                          final previousPrimaryId = _selectedService?.id;
+                          if (previousPrimaryId != null) {
+                            _additionalServiceIds.remove(previousPrimaryId);
+                          }
+                          if (val?.id != null) {
+                            _additionalServiceIds.remove(val!.id);
+                          }
+                          _selectedService = val;
+                        });
+                      },
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -602,9 +647,26 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   Future<void> _addGalleryPhotos() async {
     final ok = await _ensurePhotosPermission();
     if (!ok) return;
+    final int remainingSlots = _maxPhotos - _gallery.length;
+    if (remainingSlots <= 0) {
+      await _showUpgradeDialog(
+        title: 'Досягнуто ліміту фото',
+        message: 'Ви вже використали усі $_maxPhotos слотів. Оновіть до Premium, щоб додати більше.',
+      );
+      return;
+    }
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(imageQuality: 100);
     if (picked.isEmpty) return;
+
+    final limitedSelection = picked.take(remainingSlots).toList();
+    if (limitedSelection.length < picked.length) {
+      AppToast.show(
+        'Можна додати ще $remainingSlots фото. Додаткові будуть пропущені.',
+        background: Colors.orange,
+      );
+    }
+    if (limitedSelection.isEmpty) return;
 
     // Immediately show uploading indicator to provide instant feedback
     if (mounted) {
@@ -614,11 +676,12 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
       });
     }
 
+    bool uploadedAny = false;
     bool allUploaded = false;
     try {
       // Prepare base64 with prefix and chunk into max 10 per request
       List<String> payload = [];
-      for (final x in picked) {
+      for (final x in limitedSelection) {
         final bytes = await x.readAsBytes();
         final processed = await _processSquareUnder500kb(bytes);
         final b64 = base64Encode(processed);
@@ -671,23 +734,26 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
           AppToast.show('Помилка завантаження фото', background: Colors.red);
           break;
         }
+        uploadedAny = true;
         sent += chunk.length;
         if (mounted) setState(() => _uploadProgress = sent / payload.length);
       }
 
       allUploaded = sent == payload.length && payload.isNotEmpty;
-      if (allUploaded) {
-        // Refresh details only if everything really uploaded
+    } finally {
+      if (uploadedAny) {
         await _load();
       }
-    } finally {
       if (mounted) {
         setState(() {
           _uploading = false;
           _uploadProgress = 0.0;
         });
-        if (allUploaded) {
-          AppToast.show('Фото завантажено', background: Colors.green);
+        if (uploadedAny) {
+          AppToast.show(
+            allUploaded ? 'Фото завантажено' : 'Частину фото завантажено',
+            background: Colors.green,
+          );
         }
       }
     }
@@ -836,6 +902,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   }
 
   Future<void> _openAdditionalServicesDialog() async {
+    await _refreshSubscriptionLimits();
     final serviceProv = Provider.of<ServiceProvider>(context, listen: false);
     final items = serviceProv.services;
     final Set<int> draft = Set<int>.from(_additionalServiceIds);
@@ -880,7 +947,8 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                     itemCount: items.length,
                     itemBuilder: (_, i) {
                       final svc = items[i];
-                      final checked = draft.contains(svc.id);
+                      final isPrimary = svc.id == _selectedService?.id;
+                      final checked = isPrimary || draft.contains(svc.id);
                       return Container(
                         decoration: BoxDecoration(
                           color: Styles().backgroundFormColor.withOpacity(0.1),
@@ -889,11 +957,13 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         child: CheckboxListTile(
                           value: checked,
-                          onChanged: (v) {
+                          onChanged: isPrimary
+                              ? null
+                              : (v) {
                             if (v == true) {
                               final mainId = _selectedService?.id;
                               final currentTotal = (mainId != null ? 1 : 0) + draft.length;
-                              if (currentTotal + 1 > _maxServices) {
+                              if (currentTotal >= _maxServices) {
                                 AppToast.show('Досягнуто ліміту послуг. Оновіть до Premium.', background: Colors.red);
                                 return;
                               }
@@ -936,15 +1006,19 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   Future<void> _saveAdditionalServices(Set<int> draft) async {
     // Ensure main service is present
     final mainId = _selectedService?.id;
-    if (mainId != null) draft.add(mainId);
+    final List<int> serviceIds = [];
+    if (mainId != null) {
+      serviceIds.add(mainId);
+    }
+    serviceIds.addAll(draft);
 
     final api = ApiService(AppConstants.serverUrl);
     final res = await api.putRequest('masters/$_masterId/services', {
-      'service_ids': draft.toList(),
+      'service_ids': serviceIds,
     });
     if ((res['status']?.toString().toLowerCase() ?? '') == 'ok') {
       setState(() {
-        _additionalServiceIds = draft;
+        _additionalServiceIds = Set<int>.from(draft);
       });
       AppToast.show('Послуги оновлено', background: Colors.green);
     } else {
