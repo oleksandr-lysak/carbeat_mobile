@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -684,8 +685,15 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   }
 
   Future<bool> _ensurePhotosPermission() async {
-    // iOS: Permission.photos; Android: читання медіа з галереї покриває сам ImagePicker,
-    // але просимо READ_MEDIA_IMAGES / storage через permission_handler для дружнього UX.
+    // On Android 13+ (API 33+), ImagePicker uses Photo Picker which doesn't require permissions
+    // On iOS and older Android, we check permissions
+    if (Platform.isAndroid) {
+      // On Android 13+, ImagePicker handles permissions automatically via Photo Picker
+      // We don't need to request permissions explicitly
+      return true;
+    }
+    
+    // iOS: Permission.photos
     var status = await Permission.photos.status;
     if (status.isGranted || status.isLimited) return true;
     status = await Permission.photos.request();

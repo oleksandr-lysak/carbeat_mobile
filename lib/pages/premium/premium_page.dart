@@ -22,7 +22,6 @@ class _PremiumPageState extends State<PremiumPage> {
   bool _available = false;
   List<ProductDetails> _products = [];
   bool _processingPurchase = false;
-  bool _startingTrial = false;
 
   @override
   void initState() {
@@ -133,33 +132,6 @@ class _PremiumPageState extends State<PremiumPage> {
     }
   }
 
-  Future<void> _startTrial() async {
-    if (_startingTrial) return;
-    setState(() => _startingTrial = true);
-    try {
-      final api = ApiService(AppConstants.serverUrl);
-      final res = await api.postRequest('subscription/trial', {});
-      final ok = res['active'] == true || (res['data']?['active'] == true);
-      if (!mounted) return;
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Безкоштовний місяць активовано')),
-        );
-        Navigator.of(context).pop(true);
-      } else {
-        final msg = (res['message'] ?? 'Не вдалося активувати пробний період').toString();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Помилка активації пробного періоду')),
-      );
-    } finally {
-      if (mounted) setState(() => _startingTrial = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -218,17 +190,7 @@ class _PremiumPageState extends State<PremiumPage> {
                       // Legal notice about free trial and billing
                       _LegalNotice(products: _products),
                       const SizedBox(height: 12),
-                      // Start free trial CTA
-                      Center(
-                        child: ElevatedButton(
-                          onPressed: _startingTrial ? null : _startTrial,
-                          style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor, elevation: 0),
-                          child: _startingTrial
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                              : Text('Почати безкоштовний місяць', style: TextStyle(color: Styles().titleColor)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       if (_products.isEmpty)
                         Expanded(
                           child: Center(
@@ -351,6 +313,11 @@ class _LegalNotice extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'Перші 30 днів підписки — безкоштовно. Безкоштовний період налаштовується в Google Play / App Store.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        const SizedBox(height: 6),
         Text(
           'Після завершення безкоштовного місяця з вас автоматично буде списано $priceText, якщо ви не скасуєте підписку завчасно.',
           style: const TextStyle(color: Colors.white70),

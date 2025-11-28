@@ -20,6 +20,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
   final ImagePicker _picker = ImagePicker();
   List<AssetEntity> _photos = [];
   String? _selectedPhotoId;
+  File? _pickedFile;
   bool _permissionGranted = true;
   late latlong.LatLng? _selectedLocation;
   late String? _phone;
@@ -53,38 +54,18 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
     if (_isLoading) return;
     _isLoading = true;
     try {
-      // Єдиний офіційний запит доступу до фото
+      // On Android 13+ (API 33+), we don't request permissions explicitly
+      // as they're not in the manifest. PhotoManager will fail, so we use ImagePicker fallback.
       final perm = await PhotoManager.requestPermissionExtend(
         requestOption: const PermissionRequestOption(),
       );
       if (!perm.hasAccess) {
+        // On Android 13+, permissions might not be grantable if not in manifest
+        // In this case, we'll use ImagePicker which uses the system Photo Picker
         setState(() {
           _permissionGranted = false;
           _photos = [];
         });
-        // Пояснювальне модальне вікно з неможливістю пропустити (без переходу в налаштування)
-        await _showBlockingPermissionModal(
-          title: 'Немає доступу до галереї',
-          message:
-              'Нам потрібен доступ до ваших фото, щоб додати зображення профілю. '
-              'Натисніть “Надати доступ”, щоб продовжити.',
-          onRetry: () async {
-            final again = await PhotoManager.requestPermissionExtend(
-              requestOption: const PermissionRequestOption(),
-            );
-            if (again.hasAccess) {
-              await _loadGalleryImages();
-            } else {
-              // Залишимо на екрані прохання про дозвіл
-              if (mounted) {
-                setState(() {
-                  _permissionGranted = false;
-                  _photos = [];
-                });
-              }
-            }
-          },
-        );
         _isLoading = false;
         return;
       }
@@ -145,6 +126,37 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
           _photos.insert(0, asset);
           _selectedPhotoId = asset.id;
         });
+      }
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    // Use ImagePicker which automatically uses Photo Picker on Android 13+
+    // This doesn't require explicit permissions
+    try {
+      final pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 100,
+      );
+      if (pickedFile != null) {
+        final file = File(pickedFile.path);
+        // Save to temp and use file path as photo ID
+        final tempDir = Directory.systemTemp;
+        final tempFile = await File('${tempDir.path}/carbeat_picked_${DateTime.now().millisecondsSinceEpoch}.jpg').create();
+        await file.copy(tempFile.path);
+        
+        setState(() {
+          _selectedPhotoId = tempFile.path;
+          _pickedFile = tempFile;
+          _permissionGranted = true; // Mark as granted to show next button
+        });
+      }
+    } catch (e) {
+      LogService.log('Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Помилка вибору фото: $e')),
+        );
       }
     }
   }
@@ -379,24 +391,49 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.photo_library_outlined,
-                          size: 48, color: Styles().titleColor.withOpacity(0.7)),
-                      const SizedBox(height: 12),
+                      if (_pickedFile != null) ...[
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(Styles.borderRadius),
+                            border: Border.all(color: Styles.selectedBorder, width: 2),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(Styles.borderRadius),
+                            child: Image.file(
+                              _pickedFile!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ] else ...[
+                        Icon(
+                          Icons.photo_library_outlined,
+                          size: 48,
+                          color: Styles().titleColor.withOpacity(0.7),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Text(
-                        _permissionGranted
-                            ? FlutterI18n.translate(context, 'gallery.no_photos')
+                        _pickedFile != null
+                            ? FlutterI18n.translate(context, 'gallery.photo_selected')
                             : FlutterI18n.translate(context, 'gallery.permission_needed'),
                         style: TextStyle(color: Styles().titleColor),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadGalleryImages,
-                        style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor),
-                        child: Text(
-                          FlutterI18n.translate(context, 'gallery.retry'),
+                      ElevatedButton.icon(
+                        onPressed: _pickImageFromGallery,
+                        icon: Icon(Icons.photo_library, color: Styles().titleColor),
+                        label: Text(
+                          _pickedFile != null
+                              ? FlutterI18n.translate(context, 'gallery.change_photo')
+                              : FlutterI18n.translate(context, 'gallery.choose_photo'),
                           style: TextStyle(color: Styles().titleColor),
                         ),
+                        style: ElevatedButton.styleFrom(backgroundColor: Styles().checkColor),
                       ),
                     ],
                   ),
@@ -417,7 +454,11 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
             ),
           ),
           onPressed: () {
-            if (_selectedPhotoId == null) return;
+            if (_selectedPhotoId == null) {
+              // If no photo selected, try to pick one
+              _pickImageFromGallery();
+              return;
+            }
             Navigator.pushNamed(
               context,
               '/summary-info',

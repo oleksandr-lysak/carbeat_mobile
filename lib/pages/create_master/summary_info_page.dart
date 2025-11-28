@@ -130,19 +130,35 @@ class SummaryInfoPageState extends State<SummaryInfoPage>
   }
 
   Future<void> _getPhotoFromGallery(String photoId) async {
-    final albums = await PhotoManager.getAssetPathList(onlyAll: true);
-
-    for (final album in albums) {
-      final assets = await album.getAssetListPaged(page: 0, size: 100);
-      for (final asset in assets) {
-        if (asset.id == photoId) {
-          final file = await asset.file;
-          setState(() {
-            _photoFile = file;
-          });
-          return;
+    // Check if photoId is a file path (from ImagePicker) or an asset ID (from PhotoManager)
+    final file = File(photoId);
+    if (await file.exists()) {
+      // It's a file path from ImagePicker
+      setState(() {
+        _photoFile = file;
+      });
+      return;
+    }
+    
+    // Otherwise, try to find it in PhotoManager
+    try {
+      final albums = await PhotoManager.getAssetPathList(onlyAll: true);
+      for (final album in albums) {
+        final assets = await album.getAssetListPaged(page: 0, size: 100);
+        for (final asset in assets) {
+          if (asset.id == photoId) {
+            final assetFile = await asset.file;
+            setState(() {
+              _photoFile = assetFile;
+            });
+            return;
+          }
         }
       }
+    } catch (e) {
+      // PhotoManager might fail on Android 13+ without permissions
+      // In this case, photoId should be a file path
+      LogService.log('Error loading photo from PhotoManager: $e');
     }
   }
 
