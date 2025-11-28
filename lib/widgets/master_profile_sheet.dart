@@ -731,12 +731,24 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
     // iOS: Permission.photos
     var status = await Permission.photos.status;
     if (status.isGranted || status.isLimited) return true;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      await _showPermissionModal(
+        title: 'Немає доступу до фото',
+        message:
+            'Надайте доступ до ваших фото, щоб додати аватар і галерею.',
+        showSettingsButton: true,
+      );
+      return false;
+    }
     status = await Permission.photos.request();
     if (status.isGranted || status.isLimited) return true;
+    final bool needsSettings =
+        status.isPermanentlyDenied || status.isRestricted;
     await _showPermissionModal(
       title: 'Немає доступу до фото',
       message:
           'Надайте доступ до ваших фото, щоб додати аватар і галерею.',
+      showSettingsButton: needsSettings,
     );
     return false;
   }
@@ -744,6 +756,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   Future<void> _showPermissionModal({
     required String title,
     required String message,
+    bool showSettingsButton = false,
   }) async {
     if (!mounted) return;
     await showModalBottomSheet(
@@ -798,7 +811,23 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                       style: TextStyle(color: Styles().titleColor)),
                 ),
               ),
-              const SizedBox(height: 8),
+              if (showSettingsButton) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () async {
+                      Navigator.of(context).pop();
+                      await openAppSettings();
+                    },
+                    child: Text(
+                      'Відкрити налаштування',
+                      style: TextStyle(color: Styles().titleColor),
+                    ),
+                  ),
+                ),
+              ] else
+                const SizedBox(height: 8),
             ],
           ),
         );

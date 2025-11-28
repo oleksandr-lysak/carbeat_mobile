@@ -35,6 +35,7 @@ import 'package:carbeat/services/api_services/api_service.dart';
 import 'package:carbeat/widgets/app_toast.dart';
 import 'package:carbeat/widgets/master_details_sheet.dart';
 import 'package:carbeat/widgets/master_expandable_sheet.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class MapView extends StatefulWidget {
@@ -114,12 +115,20 @@ class MapViewState extends State<MapView>
 
   int? _selectedMasterId;
 
+  bool _locationPermissionGranted = true;
+  bool _locationPermanentlyDenied = false;
+  bool _locationServicesEnabled = true;
+  bool _usingFallbackLocation = false;
+  bool _locationInitInProgress = false;
+  bool _shouldRecheckLocationOnResume = false;
+
   late final StreamSubscription _mapSub;
   bool _isRouteVisible = false;
   bool _isRouteSubscribed = false;
 
   // Threshold: show detailed markers above this zoom, blue dots otherwise
   static const double _markerDetailZoomThreshold = 15.0;
+  static const LatLng _fallbackLocation = LatLng(50.4501, 30.5234);
 
   @override
   void initState() {
@@ -235,6 +244,10 @@ class MapViewState extends State<MapView>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (_shouldRecheckLocationOnResume) {
+        _shouldRecheckLocationOnResume = false;
+        _retryLocationRequest(resetData: true);
+      }
       if (_isRouteVisible) {
         // periodic refresh removed
       }
@@ -271,50 +284,120 @@ class MapViewState extends State<MapView>
     // periodic refresh removed
   }
 
+  Future<void> _retryLocationRequest({bool resetData = false}) async {
+    if (!mounted) return;
+    if (resetData) {
+      setState(() {
+        loading = true;
+        mapMasters.clear();
+        masters.clear();
+        currentPage = 1;
+        totalPages = 1;
+        mapWasLoaded = false;
+        _selectedMasterId = null;
+        selectedIndex = -1;
+      });
+    }
+    await _initLocationAndLoadData();
+  }
+
   Future<void> _initLocationAndLoadData() async {
+    if (_locationInitInProgress) return;
+    _locationInitInProgress = true;
     try {
-      // Ensure we have permission first
-      if (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS) {
-        final permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          await Geolocator.requestPermission();
+      final hasPermission = await _ensureLocationAccess();
+
+      // Try to get location with timeout only if permission granted
+      LatLng? location;
+      if (hasPermission) {
+        try {
+          location = await LocationService.getCurrentLocation().timeout(
+            const Duration(seconds: 5),
+          );
+        } catch (_) {
+          location = null;
         }
       }
 
-      // Notifications permission (FCM) removed
-
-      // Try to get location with timeout
-      LatLng? location;
-      try {
-        location = await LocationService.getCurrentLocation().timeout(
-          const Duration(seconds: 5),
-        );
-      } catch (_) {
-        location = null;
+      bool usingFallback = false;
+      if (location == null) {
+        location = _fallbackLocation;
+        usingFallback = true;
       }
-
-      // Fallback to a safe default if location unavailable
-      location ??= LatLng(50.4501, 30.5234); // Kyiv center as sensible default
-
       if (!mounted) return;
+      final bool wasUsingFallback = _usingFallbackLocation;
       setState(() {
         currentLocation = location;
+        _usingFallbackLocation = usingFallback || !hasPermission;
       });
+      final bool controllerReady = _controllerReady();
+      final bool shouldCenter =
+          !_usingFallbackLocation && hasPermission && controllerReady;
+      final bool recoveredFromFallback =
+          wasUsingFallback && !_usingFallbackLocation && controllerReady;
+      if (shouldCenter || recoveredFromFallback) {
+        AnimationService.animatedMapMove(
+          mapController,
+          _animationController,
+          location,
+          mapController.camera.zoom,
+        );
+      }
       await _loadMapData(location);
 
       // Initial filtering once data is loaded.
       _updateVisibleMasters();
+      if (mounted) {
+        setState(() {
+          _locationPermissionGranted = hasPermission;
+          loading = false;
+        });
+      }
     } catch (_) {
       // As last resort, show default map and allow user to proceed
       if (!mounted) return;
-      final fallback = LatLng(50.4501, 30.5234);
       setState(() {
-        currentLocation = currentLocation ?? fallback;
+        currentLocation = currentLocation ?? _fallbackLocation;
         loading = false;
+        _usingFallbackLocation = true;
       });
       _updateVisibleMasters();
+    } finally {
+      _locationInitInProgress = false;
     }
+  }
+
+  Future<bool> _ensureLocationAccess() async {
+    bool servicesEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!servicesEnabled) {
+      if (mounted) {
+        setState(() {
+          _locationServicesEnabled = false;
+          _locationPermissionGranted = false;
+          _locationPermanentlyDenied = false;
+        });
+      }
+      return false;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    final granted = permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+    final permanentlyDenied = permission == LocationPermission.deniedForever;
+
+    if (mounted) {
+      setState(() {
+        _locationServicesEnabled = true;
+        _locationPermissionGranted = granted;
+        _locationPermanentlyDenied = permanentlyDenied;
+      });
+    }
+
+    return granted;
   }
 
   Future<List<Master>> getData(
@@ -323,11 +406,6 @@ class MapViewState extends State<MapView>
     int page,
     double zoom,
   ) async {
-    if (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS) {
-      await Geolocator.checkPermission();
-    }
-
     String serverUrl = AppConstants.serverUrl;
     final String locale = await LanguageService.getLanguage() ?? 'en';
     Map<String, dynamic> params = {
@@ -550,6 +628,13 @@ class MapViewState extends State<MapView>
 
   void _moveToCurrentLocation() {
     if (currentLocation == null) return;
+    if (_usingFallbackLocation) {
+      AppToast.show(
+        'Надайте доступ до геолокації, щоб перейти до вашої позиції.',
+        background: Colors.orange,
+      );
+      return;
+    }
     AnimationService.animatedMapMove(
       mapController,
       _animationController,
@@ -571,10 +656,12 @@ class MapViewState extends State<MapView>
         final mastersToShow = List<Master>.from(visibleMasters);
         // Compute distance (km) from current location and sort: available first, then by distance asc
         final Distance distanceCalc = Distance();
+        final bool canMeasureDistance =
+            currentLocation != null && !_usingFallbackLocation;
         final List<Map<String, dynamic>> items =
             mastersToShow.map((m) {
               final double km =
-                  (currentLocation != null)
+                  (canMeasureDistance)
                       ? distanceCalc.as(
                         LengthUnit.Kilometer,
                         currentLocation!,
@@ -749,6 +836,90 @@ class MapViewState extends State<MapView>
     );
   }
 
+  Future<void> _openSystemLocationSettings() async {
+    _shouldRecheckLocationOnResume = true;
+    try {
+      final opened = await Geolocator.openLocationSettings();
+      if (!opened) {
+        await openAppSettings();
+      }
+    } catch (_) {
+      await openAppSettings();
+    }
+  }
+
+  Widget _buildLocationPermissionBanner(BuildContext context) {
+    if (_locationPermissionGranted && _locationServicesEnabled) {
+      return const SizedBox.shrink();
+    }
+
+    final bool servicesDisabled = !_locationServicesEnabled;
+    final theme = Theme.of(context);
+    final String title = servicesDisabled
+        ? 'Геолокація вимкнена'
+        : _locationPermanentlyDenied
+            ? 'Надайте доступ до геолокації'
+            : 'Дозвольте доступ до геолокації';
+    final String subtitle = servicesDisabled
+        ? 'Увімкніть служби геолокації, щоб показати майстрів поруч.'
+        : 'Ми не можемо показати ваше місцезнаходження без дозволу.';
+
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 12,
+      left: 16,
+      right: 16,
+      child: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.black.withOpacity(0.85),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (!servicesDisabled && !_locationPermanentlyDenied)
+                    TextButton(
+                      onPressed: () => _retryLocationRequest(resetData: true),
+                      child: const Text(
+                        'Надати доступ',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _openSystemLocationSettings,
+                    child: Text(
+                      'Налаштування',
+                      style: TextStyle(color: Styles().checkColor),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (currentLocation == null) {
@@ -783,7 +954,7 @@ class MapViewState extends State<MapView>
                 tileProvider: const FMTCStore('mapStore').getTileProvider(),
               ),
               // User location marker
-              if (currentLocation != null)
+              if (currentLocation != null && !_usingFallbackLocation)
                 UserLocationMarker(location: currentLocation!),
               // Маркери: кластеризація якщо в межах екрана > 100
               if (_countMastersInViewport() > 100)
@@ -1120,6 +1291,7 @@ class MapViewState extends State<MapView>
                 child: const Center(child: Loading()),
               ),
             ),
+          _buildLocationPermissionBanner(context),
         ],
       ),
     );

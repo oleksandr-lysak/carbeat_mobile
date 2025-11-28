@@ -123,6 +123,19 @@ class MapPickerPageState extends State<MapPickerPage> {
                 ),
               ),
               onPressed: () {
+                if (_selectedLocation == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        FlutterI18n.translate(
+                          context,
+                          'select_location',
+                        ),
+                      ),
+                    ),
+                  );
+                  return;
+                }
                 Navigator.pushNamed(
                   context,
                   '/create-master',

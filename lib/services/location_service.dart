@@ -6,26 +6,31 @@ import 'package:carbeat/constants/app_constants.dart';
 import 'package:carbeat/services/log_service.dart';
 
 class LocationService {
-  static Future<LatLng> getCurrentLocation() async {
+  static Future<LatLng?> getCurrentLocation() async {
     try {
-      if (await Geolocator.isLocationServiceEnabled()) {
-        LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied ||
-            permission == LocationPermission.deniedForever) {
-          permission = await Geolocator.requestPermission();
-        }
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!servicesEnabled) return null;
 
-        Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-
-        return LatLng(position.latitude, position.longitude);
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.unableToDetermine) {
+        return null;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      return LatLng(position.latitude, position.longitude);
     } catch (e) {
       LogService.log('Error getting location: $e');
     }
 
-    return const LatLng(50.249198, 30.350024); // Якщо геолокація недоступна
+    return null;
   }
 
   static Future<String> getCountry(LatLng location) async {

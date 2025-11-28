@@ -164,9 +164,24 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
   Future<bool> _ensureCameraPermission() async {
     var status = await Permission.camera.status;
     if (status.isGranted) return true;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      await _showBlockingPermissionModal(
+        title: 'Немає доступу до камери',
+        message:
+            'Нам потрібен доступ до камери, щоб зробити фото. '
+            'Натисніть “Надати доступ”, щоб продовжити.',
+        onRetry: () async {
+          await Permission.camera.request();
+        },
+        showSettingsButton: true,
+      );
+      return false;
+    }
     status = await Permission.camera.request();
     if (status.isGranted) return true;
     // Якщо користувач відмовив — пояснити і дати кнопку “Надати доступ” (без переходу в налаштування)
+    final bool requiresSettings =
+        status.isPermanentlyDenied || status.isRestricted;
     await _showBlockingPermissionModal(
       title: 'Немає доступу до камери',
       message:
@@ -175,6 +190,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
       onRetry: () async {
         await Permission.camera.request();
       },
+      showSettingsButton: requiresSettings,
     );
     return false;
   }
@@ -183,6 +199,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
     required String title,
     required String message,
     required Future<void> Function() onRetry,
+    bool showSettingsButton = false,
   }) async {
     if (!mounted) return;
     await showModalBottomSheet(
@@ -239,6 +256,22 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
                   ),
                 ),
               ),
+              if (showSettingsButton) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () async {
+                      Navigator.of(context).pop();
+                      await openAppSettings();
+                    },
+                    child: Text(
+                      'Відкрити налаштування',
+                      style: TextStyle(color: Styles().titleColor),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
             ],
           ),
