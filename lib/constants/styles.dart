@@ -7,7 +7,7 @@ class Styles {
   Color titleColor = Colors.white;
   static const subtitleColor = Colors.white70;
   static const descriptionColor = Colors.white70;
-  Color backgroundFormColor = Colors.grey[200]!;
+  Color backgroundFormColor = const Color.fromARGB(255, 202, 231, 250)!;
   static const textInputColor = Color.fromARGB(250, 110, 110, 110);
   static const selectedColor = Color(0xff3d8cd6);
   static const selectedBorder = Colors.black87;

@@ -21,6 +21,7 @@ import 'package:carbeat/services/log_service.dart';
 import 'app_toast.dart';
 import 'package:image/image.dart' as img;
 import 'package:carbeat/pages/premium/premium_page.dart';
+import 'package:intl/intl.dart';
 
 class MasterProfileSheet extends StatefulWidget {
   const MasterProfileSheet({super.key});
@@ -51,6 +52,19 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
   int _maxDescription = 200;
   int _maxServices = 2;
 
+  static const List<String> _premiumHighlights = [
+    'До 20 фото в галереї',
+    'Опис до 2000 символів',
+    'До 10 послуг',
+  ];
+
+  // Premium/subscription state
+  bool _isPremiumActive = false;
+  DateTime? _premiumUntil;
+  bool _subscriptionActive = false;
+  DateTime? _subscriptionExpiresAt;
+  bool _hasSubscriptionStatus = false;
+
   void _updateLimitsFromStatus(Map<String, dynamic> status) {
     _maxPhotos =
         (status['max_photos'] is num) ? (status['max_photos'] as num).toInt() : _maxPhotos;
@@ -59,23 +73,70 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
         : _maxDescription;
     _maxServices =
         (status['max_services'] is num) ? (status['max_services'] as num).toInt() : _maxServices;
+    _isPremiumActive = status['is_premium'] == true;
+    _premiumUntil = _parseDate(status['premium_until']);
   }
 
-  Future<void> _refreshSubscriptionLimits() async {
+  void _applySubscriptionStatus(Map<String, dynamic> subscription) {
+    _subscriptionActive = subscription['active'] == true;
+    _subscriptionExpiresAt = _parseDate(subscription['expires_at']);
+    _hasSubscriptionStatus = true;
+  }
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String && value.trim().isEmpty) return null;
     try {
-      final statusRes =
-          await ApiService(AppConstants.serverUrl).getRequest('user/status');
-      final Map<String, dynamic> status =
-          (statusRes['data'] is Map<String, dynamic>) ? statusRes['data'] : statusRes;
-      if (!mounted) {
-        _updateLimitsFromStatus(status);
-      } else {
-        setState(() {
-          _updateLimitsFromStatus(status);
-        });
-      }
+      return DateTime.parse(value.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _formatDate(DateTime? date) {
+    if (date == null) return null;
+    try {
+      return DateFormat('d MMMM yyyy', 'uk').format(date.toLocal());
+    } catch (_) {
+      return DateFormat('yyyy-MM-dd').format(date.toLocal());
+    }
+  }
+
+
+  Future<void> _refreshSubscriptionLimits() async {
+    final api = ApiService(AppConstants.serverUrl);
+    Map<String, dynamic>? status;
+    Map<String, dynamic>? subscription;
+
+    try {
+      final statusRes = await api.getRequest('user/status');
+      status = (statusRes['data'] is Map<String, dynamic>) ? statusRes['data'] : statusRes;
     } catch (_) {
       // ignore network errors; keep previous limits
+    }
+
+    try {
+      final subscriptionRes = await api.getRequest('subscription/status');
+      subscription =
+          (subscriptionRes['data'] is Map<String, dynamic>) ? subscriptionRes['data'] : subscriptionRes;
+    } catch (_) {
+      // ignore subscription errors; allow manual premium/trial data to survive
+    }
+
+    void applyUpdates() {
+      if (status != null) {
+        _updateLimitsFromStatus(status);
+      }
+      if (subscription != null) {
+        _applySubscriptionStatus(subscription);
+      }
+    }
+
+    if (!mounted) {
+      applyUpdates();
+    } else {
+      setState(applyUpdates);
     }
   }
 
@@ -98,6 +159,8 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
     _descrCtrl.text = m.description;
     _mainPhotoPath = m.mainPhoto;
     _selectedService = DropdownItem(id: m.specialityId, name: '');
+    _isPremiumActive = m.isPremium;
+    _premiumUntil = _parseDate(m.premiumUntil);
 
     setState(() => _loading = false);
 
@@ -244,35 +307,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(10, 40),
-                            side: BorderSide(color: Styles().checkColor),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const PremiumPage()),
-                            );
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.workspace_premium, color: Colors.amber, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Оформити Premium',
-                                style: TextStyle(
-                                  color: Styles().titleColor,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildPremiumStatusCard(),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -322,7 +357,7 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
                         return Align(
                           alignment: Alignment.centerRight,
                           child: Text(
-                            '${currentLength}/${maxLength ?? _maxDescription} · лишилось ${remaining < 0 ? 0 : remaining}',
+                            '$currentLength/${maxLength ?? _maxDescription} · лишилось ${remaining < 0 ? 0 : remaining}',
                             style: const TextStyle(color: Colors.white70, fontSize: 12),
                           ),
                         );
@@ -587,6 +622,270 @@ class _MasterProfileSheetState extends State<MasterProfileSheet> {
               ),
             ),
           );
+  }
+
+  Widget _buildPremiumStatusCard() {
+    final bool hasPremium = _isPremiumActive;
+    final bool isTrial = hasPremium && _hasSubscriptionStatus && !_subscriptionActive;
+    final bool needsUpgrade = !hasPremium;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Styles().primaryColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: needsUpgrade
+              ? Colors.amberAccent.withOpacity(0.4)
+              : (isTrial ? Colors.lightBlueAccent.withOpacity(0.4) : Colors.greenAccent.withOpacity(0.4)),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Main status button
+          _buildPremiumStatusButton(hasPremium, isTrial, needsUpgrade),
+          const SizedBox(height: 16),
+          // Benefits section
+          _buildBenefitsSection(),
+          // Period info if applicable
+          if (_formatDate(_premiumUntil ?? _subscriptionExpiresAt) != null)
+            _buildPeriodInfo(hasPremium, isTrial),
+          // Additional info
+          _buildAdditionalInfo(needsUpgrade, isTrial),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumStatusButton(bool hasPremium, bool isTrial, bool needsUpgrade) {
+    final Color buttonColor = needsUpgrade
+        ? Colors.amberAccent
+        : (isTrial ? Colors.lightBlueAccent : Colors.greenAccent);
+    final IconData buttonIcon = needsUpgrade
+        ? Icons.workspace_premium_outlined
+        : (isTrial ? Icons.hourglass_top : Icons.verified);
+    final String buttonText = needsUpgrade
+        ? 'Оформити'
+        : (isTrial ? 'Зараз безкоштовний період' : 'Ви преміум користувач');
+
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        onPressed: needsUpgrade ? _openPremiumFlow : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: buttonColor.withOpacity(0.15),
+          foregroundColor: buttonColor,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: buttonColor.withOpacity(0.3), width: 1),
+                ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(buttonIcon, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+              child: Text(
+                buttonText,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: buttonColor,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            if (needsUpgrade)
+              Icon(Icons.arrow_forward_ios, size: 16, color: buttonColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBenefitsSection() {
+    return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+          'Переваги Premium',
+                      style: TextStyle(
+                        color: Styles().titleColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+                      ),
+                    ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: _premiumHighlights.map(_buildBenefitChip).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBenefitChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle, color: Colors.greenAccent, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: Styles().titleColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildPeriodInfo(bool hasPremium, bool isTrial) {
+    final String? periodLabel = _formatDate(_premiumUntil ?? _subscriptionExpiresAt);
+    if (periodLabel == null) return const SizedBox.shrink();
+
+    final String periodText = isTrial
+        ? 'Безкоштовний період діє до $periodLabel'
+        : 'Підписка активна до $periodLabel';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(8),
+            ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.calendar_today,
+            size: 16,
+            color: hasPremium ? Colors.greenAccent : Colors.lightBlueAccent,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              periodText,
+              style: TextStyle(
+                color: Styles().titleColor,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+              ),
+            ),
+          ],
+      ),
+    );
+  }
+
+  Widget _buildAdditionalInfo(bool needsUpgrade, bool isTrial) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(8),
+          ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (needsUpgrade) ...[
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.amberAccent),
+                const SizedBox(width: 8),
+                Expanded(
+                child: Text(
+                    'Перші 30 днів безкоштовно!',
+                  style: TextStyle(
+                      color: Colors.amberAccent,
+                      fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+              'Після безкоштовного періоду автоматично знімається оплата через Google Play.',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+          ] else if (isTrial) ...[
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, size: 16, color: Colors.lightBlueAccent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Не забудьте оформити підписку',
+                    style: TextStyle(
+                      color: Colors.lightBlueAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Після завершення безкоштовного періоду функції Premium будуть недоступні.',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Icon(Icons.verified, size: 16, color: Colors.greenAccent),
+                const SizedBox(width: 8),
+                Expanded(
+      child: Text(
+                    'Premium активний',
+        style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Всі розширені функції доступні. Керуйте підпискою в Google Play.',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  Future<void> _openPremiumFlow() async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PremiumPage()),
+    );
+    if (result == true) {
+      await _refreshSubscriptionLimits();
+    }
   }
 
   String _buildUrl(String path) {
