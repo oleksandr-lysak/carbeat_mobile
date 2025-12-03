@@ -49,5 +49,16 @@
 	<string>Нам потрібен доступ до ваших фото, щоб додати зображення профілю</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Нам потрібен доступ до камери, щоб зробити фото</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>carbeat</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>carbeat</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

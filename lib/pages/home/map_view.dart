@@ -20,6 +20,7 @@ import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import '../../classes/garage_marker.dart';
 import '../../models/master.dart';
 import '../../services/language_service.dart';
+import 'package:carbeat/services/claim_link_manager.dart';
 import 'package:carbeat/widgets/animated_dropdown_field.dart';
 import 'package:carbeat/providers/service_provider.dart';
 import 'package:carbeat/widgets/map_filter_dialog.dart';
@@ -114,6 +115,8 @@ class MapViewState extends State<MapView>
   List<Master> visibleMasters = [];
 
   int? _selectedMasterId;
+  ClaimLinkPayload? _pendingClaim;
+  StreamSubscription<ClaimLinkPayload>? _claimLinkSub;
 
   bool _locationPermissionGranted = true;
   bool _locationPermanentlyDenied = false;
@@ -149,6 +152,16 @@ class MapViewState extends State<MapView>
     // Try to center on own master shortly after startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _centerOnOwnMasterIfNeeded();
+    });
+
+    _claimLinkSub = ClaimLinkManager.stream.listen((payload) {
+      _handleClaimDeepLink(payload);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pending = ClaimLinkManager.consumePending();
+      if (pending != null) {
+        _handleClaimDeepLink(pending);
+      }
     });
 
     // Listen for map movements/zoom changes to update visible masters.
@@ -347,6 +360,7 @@ class MapViewState extends State<MapView>
 
       // Initial filtering once data is loaded.
       _updateVisibleMasters();
+      _maybeShowPendingClaim();
       if (mounted) {
         setState(() {
           _locationPermissionGranted = hasPermission;
@@ -788,6 +802,42 @@ class MapViewState extends State<MapView>
         );
       },
     );
+  }
+
+  void _handleClaimDeepLink(ClaimLinkPayload payload) {
+    _pendingClaim = payload;
+    if (mapWasLoaded && !_presentingModal) {
+      final target = _pendingClaim!;
+      _pendingClaim = null;
+      _openMasterDetailsSheet(target.masterId);
+    }
+  }
+
+  void _maybeShowPendingClaim() {
+    if (_pendingClaim != null && mapWasLoaded && !_presentingModal) {
+      final target = _pendingClaim!;
+      _pendingClaim = null;
+      _openMasterDetailsSheet(target.masterId);
+    }
+  }
+
+  Future<void> _openMasterDetailsSheet(int masterId) async {
+    if (_presentingModal || !mounted) return;
+    _presentingModal = true;
+    await showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => MasterDetailsSheet(masterId: masterId),
+    );
+    if (mounted) {
+      setState(() {
+        _presentingModal = false;
+      });
+    } else {
+      _presentingModal = false;
+    }
   }
 
   void _showFilterDialog() async {
@@ -1306,6 +1356,7 @@ class MapViewState extends State<MapView>
     WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     _mapSub.cancel();
+    _claimLinkSub?.cancel();
     pageController.dispose();
     try {
       _socket?.dispose();

@@ -3,6 +3,7 @@ import 'package:carbeat/constants/styles.dart';
 import 'package:carbeat/constants/app_constants.dart';
 import 'package:carbeat/models/master.dart';
 import 'package:carbeat/services/api_services/api_service.dart';
+import 'package:carbeat/widgets/master_details_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -61,6 +62,21 @@ class _MasterExpandableSheetState extends State<MasterExpandableSheet> {
         const SnackBar(content: Text('Не вдалося ініціювати дзвінок')),
       );
     }
+  }
+
+  Future<void> _openFullProfile() async {
+    await showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return MasterDetailsSheet(
+          masterId: widget.master.id,
+          initialData: _full != null ? Map<String, dynamic>.from(_full!) : null,
+        );
+      },
+    );
   }
 
   String _buildUrl(String path) {
@@ -397,6 +413,23 @@ class _MasterExpandableSheetState extends State<MasterExpandableSheet> {
               );
             },
           ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Styles().titleColor.withOpacity(0.4)),
+                foregroundColor: Styles().titleColor,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: _openFullProfile,
+              child: const Text('Відкрити профіль'),
+            ),
+          ),
+        ),
         const SizedBox(height: 24),
       ],
     );
