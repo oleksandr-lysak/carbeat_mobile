@@ -543,7 +543,7 @@ class MapViewState extends State<MapView>
               height: markerSize * 1.4,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.blueAccent.withOpacity(0.25),
+                color: Styles().activeMarkerColor.withOpacity(0.25),
               ),
             ),
           if (isActive)
@@ -552,7 +552,7 @@ class MapViewState extends State<MapView>
               height: markerSize * 1.05,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+                border: Border.all(color: Styles().titleColor, width: 2),
               ),
             ),
           PulsatingMaster(master: master, isActive: isActive),
@@ -881,7 +881,7 @@ class MapViewState extends State<MapView>
               Text(
                 title,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: Colors.white,
+                  color: Styles().titleColor,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -889,7 +889,7 @@ class MapViewState extends State<MapView>
               Text(
                 subtitle,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white70,
+                  color: Styles.subtitleColor,
                 ),
               ),
               const SizedBox(height: 12),
@@ -898,9 +898,9 @@ class MapViewState extends State<MapView>
                   if (!servicesDisabled && !_locationPermanentlyDenied)
                     TextButton(
                       onPressed: () => _retryLocationRequest(resetData: true),
-                      child: const Text(
+                      child: Text(
                         'Надати доступ',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(color: Styles().titleColor),
                       ),
                     ),
                   const Spacer(),
@@ -1218,7 +1218,7 @@ class MapViewState extends State<MapView>
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _isAvailable ? Styles().checkColor : Colors.white,
-                              border: Border.all(color: Colors.white, width: 2),
+                              border: Border.all(color: Styles().titleColor, width: 2),
                             ),
                             child: Icon(
                               _isAvailable ? Icons.toggle_on : Icons.toggle_off,

@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:carbeat/services/user_service.dart';
-import '../providers/theme_provider.dart';
+import '../constants/styles.dart';
 
 class CustomBottomNavigationBar extends StatefulWidget {
   final int selectedIndex;
-  final ThemeProvider themeProvider;
   final Function(int) onItemTapped;
 
   const CustomBottomNavigationBar({
     super.key,
     required this.selectedIndex,
-    required this.themeProvider,
     required this.onItemTapped,
   });
 
@@ -47,16 +45,14 @@ class CustomBottomNavigationBarState extends State<CustomBottomNavigationBar> {
       );
     }
 
+    final styles = Styles();
     var items = _getBottomNavigationItems(isMaster);
     return BottomNavigationBar(
       items: items,
       currentIndex: widget.selectedIndex,
-      backgroundColor: widget
-          .themeProvider.themeData.bottomNavigationBarTheme.backgroundColor,
-      selectedItemColor: widget
-          .themeProvider.themeData.bottomNavigationBarTheme.selectedItemColor,
-      unselectedItemColor: widget
-          .themeProvider.themeData.bottomNavigationBarTheme.unselectedItemColor,
+      backgroundColor: styles.primaryColor,
+      selectedItemColor: Colors.black,
+      unselectedItemColor: Colors.black54,
       onTap: widget.onItemTapped,
     );
   }

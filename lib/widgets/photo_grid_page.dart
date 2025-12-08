@@ -404,7 +404,7 @@ class _PhotoGridPageState extends State<PhotoGridPage> with WidgetsBindingObserv
                           child: Container(
                             padding: const EdgeInsets.all(4.0),
                             decoration: BoxDecoration(
-                              color: Styles.selectedColor.withOpacity(0.7),
+                              color: Styles().selectedColor.withOpacity(0.7),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(

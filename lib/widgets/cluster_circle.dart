@@ -118,7 +118,7 @@ class _ClusterCircleState extends State<ClusterCircle> with SingleTickerProvider
             right: -6,
             child: Icon(
               Icons.star,
-              color: const Color(0xFFFFD700),
+              color: Styles().premiumColor,
               size: (size * 0.28).clamp(18.0, 26.0),
             ),
           ),

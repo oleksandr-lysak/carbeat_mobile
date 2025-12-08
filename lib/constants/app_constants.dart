@@ -1,9 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:loggme/loggme.dart';
+import 'package:carbeat/config/flavor_config.dart';
 
 class AppConstants {
+  static final FlavorConfig flavorConfig = FlavorConfig.current;
+
   static const String googleMapsApiKey =
       'AIzaSyA6n69rrsvicWBiCrr1n6Paet1Q-YQ7biE';
   static const String mapBoxAccessToken =
@@ -14,32 +16,15 @@ class AppConstants {
   String get urlTemplate =>
       "https://api.mapbox.com/styles/v1/rotting/$mapBoxStyleId/tiles/256/{z}/{x}/{y}@2x?access_token=$mapBoxAccessToken";
 
-  // LOCAL endpoints (used in debug/profile by default)
-  static const String _localServerUrl = 'http://10.206.191.75:100/api/';
-  static const String _localPublicServerUrl = 'http://10.206.191.75:100/';
-  static const String _localSocketUrl = 'http://10.206.191.75:100/';
-  // static const String _localServerUrl = 'http://10.0.2.2:100/api/';
-  // static const String _localPublicServerUrl = 'http://10.0.2.2:100/';
-  // static const String _localSocketUrl = 'http://10.0.2.2:100/';
-
-
-  // PROD endpoints (used in release)
-  static const String _prodServerUrl = 'https://carbeat.online/api/';
-  static const String _prodPublicServerUrl = 'https://carbeat.online/';
-  // Socket uses dedicated subdomain in prod
-  static const String _prodSocketUrl = 'https://socket.carbeat.online/';
-
-  // Select endpoints based on build mode
-  static String get serverUrl => kReleaseMode ? _prodServerUrl : _localServerUrl;
-  static String get publicServerUrl =>
-      kReleaseMode ? _prodPublicServerUrl : _localPublicServerUrl;
-  static String get socketBaseUrl =>
-      kReleaseMode ? _prodSocketUrl : _localSocketUrl;
+  // Use flavor-specific endpoints
+  static String get serverUrl => flavorConfig.serverUrl;
+  static String get publicServerUrl => flavorConfig.publicServerUrl;
+  static String get socketBaseUrl => flavorConfig.socketBaseUrl;
 
   static const myLocation = LatLng(47.844637, 11.147302);
 
   static const String defaultLanguage = 'uk';
-  static const String appTitle = 'CarBeat';
+  static String get appTitle => flavorConfig.appTitle;
 
   final telegramChannelsSenders = <TelegramChannelSender>[
     TelegramChannelSender(

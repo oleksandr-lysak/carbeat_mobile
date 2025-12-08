@@ -46,7 +46,7 @@ class _HomePageState extends State<SettingsPage> {
     return Scaffold(
         appBar: AppBar(
           backgroundColor: Theme.of(context).primaryColor,
-          title: const Text(AppConstants.appTitle),
+          title: Text(AppConstants.appTitle),
         ),
         body: Center(
           child: Padding(

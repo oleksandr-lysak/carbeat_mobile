@@ -107,6 +107,7 @@ flutter:
     - assets/i18n/
     - assets/images/location-jump.gif
     - assets/icons/app/carbeat.png
+    - assets/icons/app/floxcity.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -1,0 +1,6 @@
+#include? "Generated.xcconfig"
+#include "Release.xcconfig"
+FLUTTER_BUILD_MODE = release
+FLUTTER_BUILD_DIR = build
+FLAVOR = floxcity
+

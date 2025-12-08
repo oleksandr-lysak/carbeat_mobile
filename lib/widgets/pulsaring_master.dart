@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import '../classes/app_themes.dart';
 import '../models/master.dart';
-import '../providers/theme_provider.dart';
 import '../constants/app_constants.dart';
+import '../constants/styles.dart';
 
 class PulsatingMaster extends StatefulWidget {
   final Master master;
@@ -75,13 +73,8 @@ class PulsatingIconState extends State<PulsatingMaster>
 
   @override
   Widget build(BuildContext context) {
-    ThemeData currentTheme =
-        Provider.of<ThemeProvider>(context, listen: true).themeData;
-
-    // Визначаємо шлях до іконки в залежності від теми (використовується лише як фолбек, не як плейсхолдер)
-    String iconPath = currentTheme == AppThemes.darkTheme
-        ? 'assets/icons/location.svg'
-        : 'assets/icons/location.svg';
+    // Icon path for fallback
+    const String iconPath = 'assets/icons/location.svg';
 
     // Формуємо повний URL для фото (надійно з базовим URL)
     String photoUrl = '';
@@ -108,15 +101,16 @@ class PulsatingIconState extends State<PulsatingMaster>
     Color outerBorderColor;
     Color innerBorderColor = Colors.transparent;
 
+    final styles = Styles();
     if (isPaid && isAvailable) {
-      outerBorderColor = Colors.green;
-      innerBorderColor = const Color(0xFFFFD700);
+      outerBorderColor = styles.availableColor;
+      innerBorderColor = styles.premiumColor;
     } else if (isPaid) {
-      outerBorderColor = const Color(0xFFFFD700);
+      outerBorderColor = styles.premiumColor;
     } else if (isAvailable) {
-      outerBorderColor = const Color(0xFF00C853);
+      outerBorderColor = styles.availableColor;
     } else {
-      outerBorderColor = const Color(0xFFBDBDBD);
+      outerBorderColor = styles.unavailableColor;
     }
 
     return AnimatedBuilder(
@@ -156,7 +150,7 @@ class PulsatingIconState extends State<PulsatingMaster>
                 child: Container(
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFD700),
+                    color: Styles().premiumColor,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(

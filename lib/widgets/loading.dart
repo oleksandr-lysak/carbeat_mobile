@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import '../constants/styles.dart';
 //import 'package:flutter_svg/flutter_svg.dart';
 //import 'package:provider/provider.dart';
 
-//import '../classes/app_themes.dart';
-//import '../providers/theme_provider.dart';
 
 class Loading extends StatefulWidget {
   const Loading({super.key});
@@ -51,7 +50,8 @@ class LoadingState extends State<Loading> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    String iconPath = 'assets/icons/app/carbeat.png';
+    final styles = Styles();
+    String iconPath = styles.appIconPath;
 
     return AnimatedBuilder(
       animation: _controller,

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:carbeat/constants/app_constants.dart';
 import 'package:carbeat/pages/home/map_view.dart';
-import 'package:provider/provider.dart';
 
-import '../../providers/theme_provider.dart';
 import '../../services/language_service.dart';
 
 class HomePage extends StatefulWidget {
@@ -39,16 +37,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.brightness_6),
-            onPressed: () {
-              Provider.of<ThemeProvider>(context, listen: false).toggleTheme();
-            },
-          ),
-        ],
-        title: const Text(AppConstants.appTitle),
+        title: Text(AppConstants.appTitle),
       ),
       body: const MapView(),
     );

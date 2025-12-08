@@ -15,7 +15,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:carbeat/pages/home/map_view.dart';
 import 'package:carbeat/providers/language_provider.dart';
 import 'package:carbeat/providers/service_provider.dart';
-import 'package:carbeat/providers/theme_provider.dart';
+import 'package:carbeat/constants/styles.dart';
 // FCM removed
 import 'package:carbeat/services/analytics_service.dart';
 import 'package:carbeat/services/dynamic_links_service.dart';
@@ -29,7 +29,6 @@ import 'package:carbeat/widgets/photo_grid_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'classes/app_scroll_behavior.dart';
-import 'classes/app_themes.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:carbeat/navigation/route_observer.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -107,10 +106,6 @@ void main() async {
         ),
         Provider<UserService>(
           create: (context) => UserService(),
-        ),
-        ChangeNotifierProvider(
-          create: (context) =>
-              ThemeProvider(AppThemes.lightTheme),
         ),
         ChangeNotifierProvider(
             create: (context) => LanguageProvider(
@@ -205,59 +200,109 @@ class _MyAppState extends State<MyApp> {
     statusBarIconBrightness: Brightness.dark,
   ),
 );
-    return Consumer<ThemeProvider>(builder: (context, themeProvider, child) {
-      return Consumer<LanguageProvider>(
-          builder: (context, languageProvider, child) {
-        return MaterialApp(
-          key: key,
-          navigatorKey: NavigationService.navigatorKey,
-          scrollBehavior: AppScrollBehavior(),
-          navigatorObservers: [
-            routeObserver,
-            FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
-          ],
-          builder: (context, child) {
-            // Wrap with a Builder to obtain a context that is a descendant of Navigator.
-            // MaterialApp.builder's context is above Navigator, so dialogs would fail.
-            return Builder(
-              builder: (innerCtx) {
-            // Check updates when app resumes to foreground
-            return _LifecycleWrapper(
-                  onResumed: () => UpdateService.checkForUpdates(innerCtx),
-              child: child ?? const SizedBox.shrink(),
-                );
-              },
-            );
-          },
-          
-          localizationsDelegates: [
-            FlutterI18nDelegate(
-              translationLoader: FileTranslationLoader(
-                // Point explicitly to the assets translations directory
-                basePath: 'assets/i18n',
-                fallbackFile: AppConstants.defaultLanguage,
-                forcedLocale: languageProvider.locale,
-              ),
-              missingTranslationHandler: (key, locale) {},
+    final styles = Styles();
+    return Consumer<LanguageProvider>(
+        builder: (context, languageProvider, child) {
+      return MaterialApp(
+        key: key,
+        navigatorKey: NavigationService.navigatorKey,
+        scrollBehavior: AppScrollBehavior(),
+        navigatorObservers: [
+          routeObserver,
+          FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+        ],
+        theme: ThemeData(
+          primaryColor: styles.primaryColor,
+          scaffoldBackgroundColor: styles.backgroundColor,
+          appBarTheme: AppBarTheme(
+            backgroundColor: styles.backgroundColor,
+            foregroundColor: styles.titleColor,
+            titleTextStyle: TextStyle(
+              color: styles.titleColor,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          locale: languageProvider.locale,
-          supportedLocales: const [Locale('en'), Locale('de'), Locale('uk')],
-          home: const MapView(),
-          routes: {
-            '/create-master': (context) => const MasterCreationPage(),
-            '/map-picker': (context) => const MapPickerPage(),
-            '/photo-grid': (context) => const PhotoGridPage(),
-            '/choose-photo': (context) => const PhotoGridPage(),
-            '/summary-info': (context) => const SummaryInfoPage(),
-            '/home-page': (context) => const HomePage(),
-            '/settings-page': (context) => const HomePage(),
-          },
-        );
-      });
+            iconTheme: IconThemeData(color: styles.titleColor),
+          ),
+          bottomNavigationBarTheme: BottomNavigationBarThemeData(
+            backgroundColor: styles.primaryColor,
+            selectedItemColor: Colors.black,
+            unselectedItemColor: Colors.black54,
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            fillColor: styles.backgroundFormColor,
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(Styles.borderRadius),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: styles.primaryColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: styles.selectedColor),
+            ),
+          ),
+          buttonTheme: ButtonThemeData(
+            buttonColor: styles.primaryColor,
+            textTheme: ButtonTextTheme.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+          ),
+          checkboxTheme: CheckboxThemeData(
+            fillColor: WidgetStateProperty.all(styles.primaryColor),
+            checkColor: WidgetStateProperty.all(Colors.black),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4.0),
+            ),
+          ),
+          floatingActionButtonTheme: FloatingActionButtonThemeData(
+            backgroundColor: styles.primaryColor,
+            foregroundColor: Colors.black,
+          ),
+        ),
+        builder: (context, child) {
+          // Wrap with a Builder to obtain a context that is a descendant of Navigator.
+          // MaterialApp.builder's context is above Navigator, so dialogs would fail.
+          return Builder(
+            builder: (innerCtx) {
+          // Check updates when app resumes to foreground
+          return _LifecycleWrapper(
+                onResumed: () => UpdateService.checkForUpdates(innerCtx),
+            child: child ?? const SizedBox.shrink(),
+              );
+            },
+          );
+        },
+        
+        localizationsDelegates: [
+          FlutterI18nDelegate(
+            translationLoader: FileTranslationLoader(
+              // Point explicitly to the assets translations directory
+              basePath: 'assets/i18n',
+              fallbackFile: AppConstants.defaultLanguage,
+              forcedLocale: languageProvider.locale,
+            ),
+            missingTranslationHandler: (key, locale) {},
+          ),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        locale: languageProvider.locale,
+        supportedLocales: const [Locale('en'), Locale('de'), Locale('uk')],
+        home: const MapView(),
+        routes: {
+          '/create-master': (context) => const MasterCreationPage(),
+          '/map-picker': (context) => const MapPickerPage(),
+          '/photo-grid': (context) => const PhotoGridPage(),
+          '/choose-photo': (context) => const PhotoGridPage(),
+          '/summary-info': (context) => const SummaryInfoPage(),
+          '/home-page': (context) => const HomePage(),
+          '/settings-page': (context) => const HomePage(),
+        },
+      );
     });
   }
 }

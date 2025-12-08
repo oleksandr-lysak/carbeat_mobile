@@ -30,8 +30,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "online.carbeat.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -51,6 +49,20 @@ android {
             keyPassword = keyPass
             storeFile = storePath?.let { file(it) }
             storePassword = storePass
+        }
+    }
+
+    flavorDimensions += "app"
+    productFlavors {
+        create("carbeat") {
+            dimension = "app"
+            applicationId = "online.carbeat.app"
+            resValue("string", "app_name", "Carbeat")
+        }
+        create("floxcity") {
+            dimension = "app"
+            applicationId = "online.floxcity.app"
+            resValue("string", "app_name", "FloxCity")
         }
     }
 
